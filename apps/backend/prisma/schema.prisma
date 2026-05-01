@@ -98,6 +98,12 @@ model Tenant {
 
   @@index([slug])
   @@index([apiKey])
+
+  shopifyStoreDomain  String?   // e.g. "mystore.myshopify.com"
+  shopifyAccessToken  String?   // from Shopify OAuth
+  razorpayKeyId       String?
+  razorpayKeySecret   String?
+
 }
 
 model Department {
@@ -264,6 +270,14 @@ model Report {
   @@index([currentActorId])
   @@index([status, slaDeadline])
   @@index([createdAt])
+
+  shopifyOrderId    String?
+  shopifyOrderNumber String?
+  refundInitiated   Boolean  @default(false)
+  refundInitiatedAt DateTime?
+  razorpayRefundId  String?
+  autoResolved      Boolean  @default(false)  // true if AI resolved without human
+  autoResolveReason String?
 }
 
 model TimelineEntry {
@@ -443,4 +457,36 @@ enum NotificationType {
   SLA_WARNING
   SLA_BREACHED
   NEW_REPORT_ASSIGNED
+}
+
+model CachedOrder {
+  id              String   @id @default(cuid())
+  tenantId        String
+  shopifyOrderId  String
+  orderNumber     String   // e.g. "#4521"
+  customerEmail   String
+  customerName    String
+  totalAmount     Int      // in paise
+  currency        String   @default("INR")
+  lineItems       Json     // array of products
+  fulfillmentStatus String
+  financialStatus String
+  createdAt       DateTime // order placed date
+  cachedAt        DateTime @default(now())
+
+  @@unique([tenantId, shopifyOrderId])
+  @@index([tenantId, orderNumber])
+}
+
+model ReturnPolicy {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  returnWindowDays Int     @default(7)
+  autoApproveBelow Int     @default(100000)  // paise — auto approve if refund < ₹1000
+  autoApproveConfidence Float @default(0.90) // AI confidence threshold
+  allowedReasons  String[] // ["damaged","wrong_item","not_delivered","defective"]
+  nonReturnableCategories String[] // ["groceries","innerwear"]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
