@@ -1,4 +1,10 @@
-// TODO P3: implement
 import { Module } from '@nestjs/common';
-@Module({})
+import { WorkflowController } from './workflow.controller';
+import { WorkflowService } from './workflow.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+@Module({
+  controllers: [WorkflowController],
+  providers: [WorkflowService, PrismaService],
+})
 export class WorkflowModule {}
