@@ -1,0 +1,5 @@
+-- AlterEnum
+ALTER TYPE "NotificationType" ADD VALUE 'AUTO_REFUND_PROCESSED';
+
+-- AlterEnum
+ALTER TYPE "ReportStatus" ADD VALUE 'AUTO_RESOLVED';

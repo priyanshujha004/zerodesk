@@ -104,6 +104,7 @@ model Tenant {
   razorpayKeyId       String?
   razorpayKeySecret   String?
 
+  returnPolicy        ReturnPolicy?
 }
 
 model Department {
@@ -340,6 +341,7 @@ enum ReportStatus {
   ESCALATED
   RESOLVED
   CLOSED
+  AUTO_RESOLVED
 }
 
 enum IssueType {
@@ -457,6 +459,7 @@ enum NotificationType {
   SLA_WARNING
   SLA_BREACHED
   NEW_REPORT_ASSIGNED
+  AUTO_REFUND_PROCESSED
 }
 
 model CachedOrder {
@@ -489,4 +492,8 @@ model ReturnPolicy {
   nonReturnableCategories String[] // ["groceries","innerwear"]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> a1237bd (db-workflow-mvpdone)
