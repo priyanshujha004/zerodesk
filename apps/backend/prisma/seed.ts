@@ -29,6 +29,22 @@ After gathering enough information, generate a structured report.`,
   });
   console.log(`  ✅ Tenant: ${tenant.name} (id: ${tenant.id})`);
 
+  // ─── RETURN POLICY ─────────────────────────────────────────
+  console.log('\nCreating return policy...');
+  await prisma.returnPolicy.upsert({
+    where: { tenantId: tenant.id },
+    update: {},
+    create: {
+      tenantId: tenant.id,
+      returnWindowDays: 7,
+      autoApproveBelow: 100000,
+      autoApproveConfidence: 0.90,
+      allowedReasons: ['Damaged', 'Wrong item', 'Not as described', 'Changed mind'],
+      nonReturnableCategories: ['Perishable', 'Innerwear', 'Gift cards'],
+    },
+  });
+  console.log('  ✅ Return policy created');
+
   // ─── DEPARTMENTS ───────────────────────────────────────────
   console.log('\nCreating departments...');
   const deptData = [

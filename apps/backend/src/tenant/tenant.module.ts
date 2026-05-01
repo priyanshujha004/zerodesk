@@ -1,4 +1,11 @@
-// TODO P1: implement
 import { Module } from '@nestjs/common';
-@Module({})
+import { TenantController } from './tenant.controller';
+import { TenantService } from './tenant.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+@Module({
+  controllers: [TenantController],
+  providers: [TenantService, PrismaService],
+  exports: [TenantService],
+})
 export class TenantModule {}
