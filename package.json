@@ -1,0 +1,16 @@
+{
+  "name": "resolveiq",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev:backend": "cd apps/backend && npm run start:dev",
+    "dev:frontend": "cd apps/dashboard && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "db:migrate": "cd apps/backend && npx prisma migrate dev",
+    "db:seed": "cd apps/backend && npx prisma db seed",
+    "db:studio": "cd apps/backend && npx prisma studio"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
