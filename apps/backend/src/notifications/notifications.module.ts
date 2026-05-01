@@ -1,4 +1,8 @@
-// TODO P4: implement
 import { Module } from '@nestjs/common';
-@Module({})
+import { NotificationsService } from './notifications.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+@Module({
+  providers: [NotificationsService, PrismaService],
+})
 export class NotificationsModule {}
