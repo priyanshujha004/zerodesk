@@ -15,6 +15,9 @@ import { WorkflowModule } from './workflow/workflow.module';
 
 // ── P4 imports ──
 import { NotificationsModule } from './notifications/notifications.module';
+@Module({
+  imports: [NotificationsModule],
+})
 
 @Module({
   imports: [
