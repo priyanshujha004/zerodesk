@@ -44,7 +44,7 @@ const FEATURES: FeatureCard[] = [
   {
     icon: '🗂️',
     title: 'Human Override Queue',
-    desc: 'The hard 20% land cleanly in your team's dashboard, fully context-loaded.',
+    desc: 'The hard 20% land cleanly in your team dashboard, fully context-loaded.',
   },
   {
     icon: '📋',
@@ -450,7 +450,7 @@ export default function LandingPage() {
             </Link>
           </div>
           <span className="text-xs text-gray-700">
-            © 2024 ResolveIQ. Built for Indian commerce.
+            © 2026 ResolveIQ. Built for Indian commerce.
           </span>
         </div>
       </footer>
