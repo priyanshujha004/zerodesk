@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ReportQueue } from '@/components/dashboard/ReportQueue';
 import { ReportItem, ReportRow } from '@/components/dashboard/ReportItem';
+import { Toast, useToast } from '@/components/dashboard/Toast';
 
 function getToken(): string {
   return typeof window !== 'undefined'
@@ -32,77 +33,49 @@ interface ApiResponse {
 
 export default function SuperAdminDashboard() {
   const router = useRouter();
-  const [reports, setReports] = useState<ReportRow[]>([]);
-  const [stats, setStats] = useState({
-    totalEscalated: 0,
-    resolvedToday: 0,
-    closedToday: 0,
-    avgResolutionHours: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const { toasts, push, dismiss } = useToast();
 
-  const fetchReports = useCallback(async () => {
-    setLoading(true);
+  const [reports, setReports] = useState<ReportRow[]>([]);
+  const [stats, setStats] = useState({ totalEscalated: 0, resolvedToday: 0, closedToday: 0, avgResolutionHours: 0 });
+  const [loading, setLoading] = useState(true);
+  const [statsRefreshing, setStatsRefreshing] = useState(false);
+
+  const fetchReports = useCallback(async (isStatRefresh = false) => {
+    if (isStatRefresh) setStatsRefreshing(true);
+    else setLoading(true);
     try {
       const token = getToken();
       const [escRes, resolvedRes, closedRes] = await Promise.all([
-        fetch('http://localhost:3000/api/reports?status=ESCALATED&limit=50', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch('http://localhost:3000/api/reports?status=RESOLVED&limit=50', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch('http://localhost:3000/api/reports?status=CLOSED&limit=50', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+        fetch('http://localhost:3000/api/reports?status=ESCALATED&limit=50', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('http://localhost:3000/api/reports?status=RESOLVED&limit=50', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('http://localhost:3000/api/reports?status=CLOSED&limit=50', { headers: { Authorization: `Bearer ${token}` } }),
       ]);
-
       const escalated: ApiResponse = await escRes.json();
       const resolved: ApiResponse = await resolvedRes.json();
       const closed: ApiResponse = await closedRes.json();
 
       const today = new Date().toDateString();
-
-      const resolvedToday = resolved.data.filter(
-        (r) => new Date(r.updatedAt).toDateString() === today,
-      ).length;
-
-      const closedToday = closed.data.filter(
-        (r) => new Date(r.updatedAt).toDateString() === today,
-      ).length;
-
-      // Avg resolution time across resolved + closed
+      const resolvedToday = resolved.data.filter((r) => new Date(r.updatedAt).toDateString() === today).length;
+      const closedToday = closed.data.filter((r) => new Date(r.updatedAt).toDateString() === today).length;
       const allResolved = [...resolved.data, ...closed.data];
-      const avgMs =
-        allResolved.length > 0
-          ? allResolved.reduce((acc, r) => {
-              return acc + (new Date(r.updatedAt).getTime() - new Date(r.createdAt).getTime());
-            }, 0) / allResolved.length
-          : 0;
+      const avgMs = allResolved.length > 0
+        ? allResolved.reduce((acc, r) => acc + (new Date(r.updatedAt).getTime() - new Date(r.createdAt).getTime()), 0) / allResolved.length
+        : 0;
 
-      setStats({
-        totalEscalated: escalated.total,
-        resolvedToday,
-        closedToday,
-        avgResolutionHours: Math.round(avgMs / 3600000),
-      });
-
-      setReports(
-        escalated.data.map((r) => ({
-          id: r.id,
-          issueSummary: r.issueSummary,
-          customerName: r.customer?.name,
-          routeToDeptName: r.routeToDeptName,
-          priority: r.priority,
-          slaDeadline: r.slaDeadline,
-          status: r.status,
-          escalationCount: r.escalationCount,
-          escalationReason: r.escalations?.[0]?.escalationReason,
-          createdAt: r.createdAt,
-        })),
-      );
+      setStats({ totalEscalated: escalated.total, resolvedToday, closedToday, avgResolutionHours: Math.round(avgMs / 3600000) });
+      setReports(escalated.data.map((r) => ({
+        id: r.id, issueSummary: r.issueSummary, customerName: r.customer?.name,
+        routeToDeptName: r.routeToDeptName, priority: r.priority,
+        slaDeadline: r.slaDeadline, status: r.status,
+        escalationCount: r.escalationCount,
+        escalationReason: r.escalations?.[0]?.escalationReason,
+        createdAt: r.createdAt,
+      })));
+    } catch {
+      push('Failed to load reports', 'error');
     } finally {
       setLoading(false);
+      setStatsRefreshing(false);
     }
   }, []);
 
@@ -123,23 +96,28 @@ export default function SuperAdminDashboard() {
         <p className="text-sm text-slate-500 mt-1">Escalation Resolution Center</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-2">
         {statCards.map((s) => (
           <div key={s.label} className="bg-[#12121a] border border-slate-800/60 rounded-xl p-5">
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">{s.label}</p>
             <p className="text-3xl font-bold" style={{ color: s.color }}>
-              {s.value}{s.suffix}
+              {statsRefreshing
+                ? <span className="inline-block w-8 h-7 rounded bg-slate-800 animate-pulse align-middle" />
+                : `${s.value}${s.suffix}`}
             </p>
           </div>
         ))}
       </div>
 
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
-          Escalated Reports
-        </h2>
-        <button onClick={fetchReports} className="text-xs text-slate-500 hover:text-[#6ee7b7] transition-colors">
-          ↻ Refresh
+      <div className="mb-4 mt-6 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Escalated Reports</h2>
+        <button
+          onClick={() => fetchReports(true)}
+          disabled={statsRefreshing}
+          className="text-xs text-slate-500 hover:text-[#6ee7b7] transition-colors flex items-center gap-1 disabled:opacity-40"
+        >
+          <span className={statsRefreshing ? 'animate-spin inline-block' : ''}>↻</span>
+          {statsRefreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
@@ -157,6 +135,8 @@ export default function SuperAdminDashboard() {
           />
         )}
       />
+
+      <Toast toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }
