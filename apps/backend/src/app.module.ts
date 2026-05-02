@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaService } from './prisma/prisma.service';
+import { ScheduleModule } from '@nestjs/schedule';
+import { SlaModule } from './sla/sla.module';
 
 // ── P1 imports ──
 import { AuthModule } from './auth/auth.module';
@@ -19,11 +21,13 @@ import { NotificationsModule } from './notifications/notifications.module';
 @Module({
   imports: [
     EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     AuthModule,
     TenantModule,
     ChatModule,
     ReportsModule,
     WorkflowModule,
+    SlaModule,    
     NotificationsModule,
   ],
   providers: [PrismaService],
