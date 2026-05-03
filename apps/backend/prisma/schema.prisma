@@ -493,8 +493,4 @@ model ReturnPolicy {
   nonReturnableCategories String[] // ["groceries","innerwear"]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> a1237bd (db-workflow-mvpdone)
