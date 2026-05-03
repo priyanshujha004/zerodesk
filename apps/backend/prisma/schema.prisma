@@ -87,14 +87,6 @@ model Tenant {
   supportEmail String?
   isActive     Boolean  @default(true)
 
-  // Shopify integration (I store, P2 reads)
-  shopifyStoreDomain  String?
-  shopifyAccessToken  String?
-
-  // Razorpay integration (I store, P4 reads)
-  razorpayKeyId       String?
-  razorpayKeySecret   String?
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -104,7 +96,6 @@ model Tenant {
   routingRules RoutingRule[]
   webhooks     Webhook[]
   auditLogs    AuditLog[]
-  returnPolicy ReturnPolicy?
 
   @@index([slug])
   @@index([apiKey])
@@ -115,19 +106,6 @@ model Tenant {
   razorpayKeySecret   String?
 
   returnPolicy        ReturnPolicy?
-}
-
-model ReturnPolicy {
-  id                       String   @id @default(cuid())
-  tenantId                 String   @unique
-  tenant                   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  returnWindowDays         Int      @default(7)
-  autoApproveBelow         Int      @default(100000)
-  autoApproveConfidence    Float    @default(0.90)
-  allowedReasons           String[]
-  nonReturnableCategories  String[]
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
 }
 
 model Department {
