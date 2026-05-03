@@ -1,5 +1,5 @@
 // Proxy → NestJS backend
-// AUTH module — owned by P1
+// TENANT module — owned by P1
 
 import { NextRequest } from 'next/server';
 
@@ -7,7 +7,7 @@ const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:3000';
 
 async function proxy(req: NextRequest, { params }: { params: { path: string[] } }) {
   const path = params.path.join('/');
-  const url = `${BACKEND}/api/auth/${path}${req.nextUrl.search}`;
+  const url = `${BACKEND}/api/tenant/${path}${req.nextUrl.search}`;
 
   const headers = new Headers(req.headers);
   headers.delete('host');
@@ -31,8 +31,4 @@ async function proxy(req: NextRequest, { params }: { params: { path: string[] } 
 export const GET = (req: NextRequest, ctx: { params: { path: string[] } }) =>
   proxy(req, ctx);
 export const POST = (req: NextRequest, ctx: { params: { path: string[] } }) =>
-  proxy(req, ctx);
-export const PUT = (req: NextRequest, ctx: { params: { path: string[] } }) =>
-  proxy(req, ctx);
-export const DELETE = (req: NextRequest, ctx: { params: { path: string[] } }) =>
   proxy(req, ctx);

@@ -13,14 +13,42 @@ export interface JwtPayload {
   email: string;
   role: Role;
   tenantId: string;
+  name: string | null;
+}
+
+export interface UserDto {
+  id: string;
+  email: string;
+  name: string | null;
+  role: Role;
+  tenantId: string;
+  deptId: string | null;
+  avatarUrl: string | null;
+  isActive: boolean;
+  lastLoginAt: string | null;
+}
+
+export interface NavItem {
+  label: string;
+  href: string;
+}
+
+export interface ReturnPolicyConfig {
+  returnWindowDays: number;
+  allowedReasons: string[];
+  autoApproveBelow: number;
+  nonReturnableCategories: string[];
 }
 
 export interface TenantConfig {
   id: string;
   name: string;
-  departments: string[];
+  slug: string;
+  departments: { id: string; name: string; description: string | null }[];
   aiPersona: string;
   primaryColor: string;
+  plan: string;
+  returnPolicy: ReturnPolicyConfig | null;
 }
 
 export interface ChatMessage {
