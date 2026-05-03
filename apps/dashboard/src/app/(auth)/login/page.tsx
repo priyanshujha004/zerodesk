@@ -133,12 +133,12 @@ export default function LoginPage() {
             )}
           </button>
 
-          <p className="mt-6 text-center text-sm text-slate-400">
+          {/* <p className="mt-6 text-center text-sm text-slate-400">
             Don&apos;t have an account?{' '}
             <a href="/register" className="text-accent hover:text-accent/80 transition-colors font-medium">
               Register
             </a>
-          </p>
+          </p> */}
         </form>
 
         {/* Footer hint */}
