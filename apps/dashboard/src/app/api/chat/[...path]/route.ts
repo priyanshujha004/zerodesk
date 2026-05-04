@@ -1,23 +1,46 @@
-// Proxy → NestJS backend
-// CHAT module — owned by P2
-3
+import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
-const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:3000';
+const BACKEND = 'http://localhost:3000/api';
 
-async function proxy(req: NextRequest, params: { path: string[] }) {
-  const path = params.path.join('/');
-  const url = `${BACKEND}/api/chat/${path}${req.nextUrl.search}`;
-  return fetch(url, {
-    method: req.method,
-    headers: req.headers,
-    body: req.method !== 'GET' ? req.body : undefined,
-    // @ts-ignore
+async function proxyRequest(req: NextRequest, path: string) {
+  const cookieStore = cookies();
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((c) => `${c.name}=${c.value}`)
+    .join('; ');
+
+  const isStream = path === 'chat/message' || path === 'chat/gemini-message';
+
+  const upstream = await fetch(`${BACKEND}/${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: cookieHeader,
+    },
+    body: req.body,
+    // @ts-expect-error - Node fetch duplex
     duplex: 'half',
   });
+
+  if (isStream) {
+    return new Response(upstream.body, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
+    });
+  }
+
+  const data = await upstream.json();
+  return Response.json(data, { status: upstream.status });
 }
 
-export const GET = (req: NextRequest, { params }: { params: { path: string[] } }) => proxy(req, params);
-export const POST = (req: NextRequest, { params }: { params: { path: string[] } }) => proxy(req, params);
-export const PUT = (req: NextRequest, { params }: { params: { path: string[] } }) => proxy(req, params);
-export const DELETE = (req: NextRequest, { params }: { params: { path: string[] } }) => proxy(req, params);
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { path: string[] } },
+) {
+  const path = 'chat/' + params.path.join('/');
+  return proxyRequest(req, path);
+}

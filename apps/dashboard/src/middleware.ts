@@ -40,11 +40,15 @@ function decodePayload(token: string): JwtPayloadPartial | null {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const publicPaths = ['/login', '/register', '/widget', '/api/chat/'];
+  const isPublic = publicPaths.some(p => pathname.startsWith(p));
+
   // Public routes — never intercept
   if (
-    pathname === '/' ||   
+    pathname === '/' ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
+    pathname.startsWith('/widget') ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/_next/')
   ) {
