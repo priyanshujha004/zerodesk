@@ -167,12 +167,71 @@ export class ShopifyService {
   }
 
   async getOrdersByEmail(tenantId: string, email: string): Promise<MappedOrder[]> {
-    if (this.isMock) return MOCK_ORDER.customerEmail === email ? [MOCK_ORDER] : [];
+    if (this.isMock) {
+      const PRIYANSHU_ORDERS: MappedOrder[] = [
+        {
+          orderNumber: '#5001',
+          customerName: 'Priyanshu Jha',
+          customerEmail: 'priyanshujha971@gmail.com',
+          totalAmount: 240000,
+          lineItems: [{ title: 'SoundMax Pro Wireless Headphones', quantity: 1, price: 240000, vendor: 'SoundMax' }],
+          fulfillmentStatus: 'fulfilled',
+          financialStatus: 'paid',
+          createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+          daysSinceOrder: 3,
+          shopifyOrderId: 'shopify_order_5001',
+        },
+        {
+          orderNumber: '#5002',
+          customerName: 'Priyanshu Jha',
+          customerEmail: 'priyanshujha971@gmail.com',
+          totalAmount: 89900,
+          lineItems: [{ title: 'USB-C Fast Charger 65W', quantity: 1, price: 89900, vendor: 'Anker' }],
+          fulfillmentStatus: 'fulfilled',
+          financialStatus: 'paid',
+          createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+          daysSinceOrder: 7,
+          shopifyOrderId: 'shopify_order_5002',
+        },
+        {
+          orderNumber: '#5003',
+          customerName: 'Priyanshu Jha',
+          customerEmail: 'priyanshujha971@gmail.com',
+          totalAmount: 459900,
+          lineItems: [{ title: 'Sony WH-1000XM5 Headphones', quantity: 1, price: 459900, vendor: 'Sony' }],
+          fulfillmentStatus: 'fulfilled',
+          financialStatus: 'paid',
+          createdAt: new Date(Date.now() - 1 * 86400000).toISOString(),
+          daysSinceOrder: 1,
+          shopifyOrderId: 'shopify_order_5003',
+        },
+        {
+          orderNumber: '#5004',
+          customerName: 'Priyanshu Jha',
+          customerEmail: 'priyanshujha971@gmail.com',
+          totalAmount: 149900,
+          lineItems: [
+            { title: 'Mechanical Keyboard RGB', quantity: 1, price: 149900, vendor: 'Keychron' },
+            { title: 'Mouse Pad XL', quantity: 1, price: 0, vendor: 'Keychron' },
+          ],
+          fulfillmentStatus: 'unfulfilled',
+          financialStatus: 'paid',
+          createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+          daysSinceOrder: 2,
+          shopifyOrderId: 'shopify_order_5004',
+        },
+      ];
 
+      if (email === 'priyanshujha971@gmail.com') return PRIYANSHU_ORDERS;
+      if (email === 'customer@shopease.com') return [MOCK_ORDER];
+      return [];
+    }
+
+    // real Shopify code below unchanged
     const cached = await this.prisma.cachedOrder.findMany({
-        where: { tenantId, customerEmail: email },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
+      where: { tenantId, customerEmail: email },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
     });
     if (cached.length) return cached.map((r) => this.toMappedOrder(r));
 
@@ -182,22 +241,22 @@ export class ShopifyService {
 
     const results: MappedOrder[] = [];
     for (const o of data.orders) {
-        const mapped = this.mapShopifyOrder(o, tenantId);
-        await this.upsertCache(mapped);
-          const result: MappedOrder = {
-          orderNumber: mapped.orderNumber,
-          customerName: mapped.customerName,
-          customerEmail: mapped.customerEmail,
-          totalAmount: mapped.totalAmount,
-          lineItems: mapped.lineItems as MappedOrder['lineItems'],
-          fulfillmentStatus: mapped.fulfillmentStatus,
-          financialStatus: mapped.financialStatus,
-          createdAt: mapped.createdAt.toISOString(),
-          daysSinceOrder: mapped.daysSinceOrder,
-          shopifyOrderId: mapped.shopifyOrderId,
-        };
-        results.push(result);
+      const mapped = this.mapShopifyOrder(o, tenantId);
+      await this.upsertCache(mapped);
+      const result: MappedOrder = {
+        orderNumber: mapped.orderNumber,
+        customerName: mapped.customerName,
+        customerEmail: mapped.customerEmail,
+        totalAmount: mapped.totalAmount,
+        lineItems: mapped.lineItems as MappedOrder['lineItems'],
+        fulfillmentStatus: mapped.fulfillmentStatus,
+        financialStatus: mapped.financialStatus,
+        createdAt: mapped.createdAt.toISOString(),
+        daysSinceOrder: mapped.daysSinceOrder,
+        shopifyOrderId: mapped.shopifyOrderId,
+      };
+      results.push(result);
     }
     return results;
-    }
+  }
 }
