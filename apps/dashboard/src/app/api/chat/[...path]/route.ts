@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
-const BACKEND = 'http://localhost:3000/api';
+const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:3000/api';
 
 async function proxyRequest(req: NextRequest, path: string) {
   const cookieStore = cookies();
