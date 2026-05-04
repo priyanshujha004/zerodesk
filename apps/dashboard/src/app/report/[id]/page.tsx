@@ -1,56 +1,19 @@
-<<<<<<< HEAD
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
 type Role = 'CUSTOMER' | 'CDA' | 'DEPT_ADMIN' | 'SUPER_ADMIN';
+type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
 type ReportStatus =
   | 'DRAFT' | 'PENDING_CDA' | 'INFO_REQUESTED' | 'APPROVED_TO_DEPT'
   | 'IN_PROGRESS' | 'COMPLETED' | 'REJECTED' | 'ESCALATED' | 'RESOLVED' | 'CLOSED';
-type Priority = 'HIGH' | 'MEDIUM' | 'LOW';
 type EscalationDecision = 'OVERRIDE_APPROVE' | 'UPHOLD_CLOSE' | 'NEEDS_MORE_INFO';
 
 interface Actor {
   id: string;
   name?: string;
   email?: string;
-=======
-// TODO P4 — all roles
-// apps/dashboard/src/app/report/[id]/page.tsx
-
-import { notFound } from 'next/navigation';
-import ReportDetail, { ReportData } from '@/components/report/ReportDetail';
-
-const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:3000';
-
-async function fetchReport(id: string): Promise<ReportData | null> {
-  try {
-    const res = await fetch(`${BACKEND}/api/reports/${id}`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return res.json() as Promise<ReportData>;
-  } catch {
-    return null;
-  }
-}
-
-interface PageProps {
-  params: { id: string };
-}
-
-export default async function ReportPage({ params }: PageProps) {
-  const report = await fetchReport(params.id);
-
-  if (!report) {
-    notFound();
-  }
-
-  return <ReportDetail report={report} />;
->>>>>>> notify-report
 }
 
 interface TimelineEntry {
