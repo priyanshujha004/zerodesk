@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND = 'http://localhost:3000';
+const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:3000';
 
 async function handler(req: NextRequest, { params }: { params: { path: string[] } }) {
   const path = params.path.join('/');
