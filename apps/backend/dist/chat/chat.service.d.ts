@@ -11,7 +11,7 @@ export declare class ChatService {
     private readonly shopifyService;
     private readonly logger;
     private readonly anthropic;
-    private readonly mailer;
+    private readonly resend;
     constructor(prisma: PrismaService, shopifyService: ShopifyService);
     sendOtp(email: string): Promise<{
         sent: boolean;
@@ -24,12 +24,9 @@ export declare class ChatService {
     }>;
     lookupOrder(tenantId: string, orderNumber: string): Promise<MappedOrder | null>;
     getOrdersByEmail(tenantId: string, email: string): Promise<MappedOrder[]>;
-    private buildInitialSystemPrompt;
-    private buildOrderSystemPrompt;
-    private extractReport;
-    private extractNeedOrder;
     private getTenantMeta;
-    streamMessage(conversationId: string, messages: ChatMessage[], res: Response, orderContext?: OrderContext, customerEmail?: string): Promise<void>;
+    private extractReport;
     streamGeminiMessage(messages: ChatMessage[], res: Response, orderContext?: OrderContext, customerEmail?: string, tenantId?: string): Promise<void>;
+    streamMessage(conversationId: string, messages: ChatMessage[], res: Response, orderContext?: OrderContext, customerEmail?: string): Promise<void>;
 }
 export {};
