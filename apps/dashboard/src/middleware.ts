@@ -42,6 +42,7 @@ export function middleware(request: NextRequest) {
 
   // Public routes — never intercept
   if (
+    pathname === '/' ||   
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
     pathname.startsWith('/api/') ||
