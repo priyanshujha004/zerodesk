@@ -1,13 +1,3 @@
-<<<<<<< HEAD
-import { Module } from '@nestjs/common';
-import { NotificationsService } from './notifications.service';
-import { PrismaService } from '../prisma/prisma.service';
-
-@Module({
-  providers: [NotificationsService, PrismaService],
-})
-export class NotificationsModule {}
-=======
 // TODO P4: implement
 // apps/backend/src/notifications/notifications.module.ts
  
@@ -26,4 +16,3 @@ import {AuthModule} from '../auth/auth.module';
   exports: [NotificationsService],
 })
 export class NotificationsModule {}
->>>>>>> notify-report

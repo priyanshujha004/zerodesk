@@ -456,8 +456,4 @@ export default function LandingPage() {
       </footer>
     </div>
   );
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> notify-report
