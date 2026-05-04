@@ -1,0 +1,496 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")  // ← needed for migrations with pgbouncer
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ─── P1 OWNS — Auth + Tenant ────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(CUSTOMER)
+
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+
+  deptId       String?
+  department   Department? @relation(fields: [deptId], references: [id])
+
+  refreshToken          String?
+  refreshTokenExpiresAt DateTime?
+
+  name        String?
+  phone       String?
+  avatarUrl   String?
+  isActive    Boolean  @default(true)
+  lastLoginAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reports         Report[]        @relation("CustomerReports")
+  assignedReports Report[]        @relation("ActorReports")
+  timelineEntries TimelineEntry[]
+  notifications   Notification[]
+  sessions        Session[]
+  escalationsBy   Escalation[]    @relation("EscalationBy")
+  escalationsResolved Escalation[] @relation("EscalationResolver")
+
+  @@index([tenantId])
+  @@index([role])
+  @@index([email, tenantId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String   @unique
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([refreshToken])
+}
+
+model Tenant {
+  id     String @id @default(uuid())
+  name   String
+  slug   String @unique
+
+  apiKey       String @unique @default(uuid())
+  widgetScript String?
+
+  primaryColor String  @default("#6ee7b7")
+  logoUrl      String?
+  faviconUrl   String?
+
+  aiPersona      String  @default("Aria, your support agent")
+  aiSystemPrompt String?
+
+  plan              TenantPlan @default(STARTER)
+  planExpiresAt     DateTime?
+  reportsThisMonth  Int        @default(0)
+  reportLimit       Int        @default(500)
+
+  ownerEmail   String
+  supportEmail String?
+  isActive     Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  departments  Department[]
+  reports      Report[]
+  routingRules RoutingRule[]
+  webhooks     Webhook[]
+  auditLogs    AuditLog[]
+
+  @@index([slug])
+  @@index([apiKey])
+
+  shopifyStoreDomain  String?   // e.g. "mystore.myshopify.com"
+  shopifyAccessToken  String?   // from Shopify OAuth
+  razorpayKeyId       String?
+  razorpayKeySecret   String?
+
+  returnPolicy        ReturnPolicy?
+}
+
+model Department {
+  id          String  @id @default(cuid())
+  tenantId    String
+  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  email       String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  admins       User[]
+  reports      Report[]
+  routingRules RoutingRule[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model RoutingRule {
+  id        String    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  issueType IssueType
+  deptId    String
+  department Department @relation(fields: [deptId], references: [id])
+
+  priority  Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, issueType])
+  @@index([tenantId])
+}
+
+enum Role {
+  CUSTOMER
+  CDA
+  DEPT_ADMIN
+  SUPER_ADMIN
+}
+
+enum TenantPlan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ─── P2 OWNS — Chat + AI Conversation ──────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+model Conversation {
+  id         String @id @default(cuid())
+  tenantId   String
+  customerId String
+
+  status    ConversationStatus @default(ACTIVE)
+
+  turnCount   Int    @default(0)
+  modelUsed   String @default("claude-sonnet-4-20250514")
+  totalTokens Int    @default(0)
+
+  reportDraftJson  Json?
+  reportConfirmed  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+  report   Report?
+
+  @@index([tenantId, customerId])
+  @@index([status])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role           MessageRole
+  content        String      @db.Text
+  tokenCount     Int?
+  containsReport Boolean     @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+}
+
+enum ConversationStatus {
+  ACTIVE
+  REPORT_READY
+  SUBMITTED
+  ABANDONED
+}
+
+enum MessageRole {
+  user
+  assistant
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ─── P3 OWNS — Reports + Workflow ──────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+model Report {
+  id String @id @default(cuid())
+
+  tenantId   String
+  tenant     Tenant @relation(fields: [tenantId], references: [id])
+  customerId String
+  customer   User   @relation("CustomerReports", fields: [customerId], references: [id])
+
+  conversationId String?      @unique
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+
+  issueType       IssueType
+  issueSummary    String    @db.VarChar(200)
+  actionRequested String    @db.VarChar(100)
+  aiConfidence    Float?
+
+  routeToDeptId   String?
+  routeToDept     Department? @relation(fields: [routeToDeptId], references: [id])
+  routeToDeptName String
+
+  priority        Priority     @default(MEDIUM)
+  status          ReportStatus @default(DRAFT)
+
+  currentActorId   String?
+  currentActor     User?   @relation("ActorReports", fields: [currentActorId], references: [id])
+  currentActorRole Role?
+
+  slaDeadline  DateTime?
+  slaBreached  Boolean   @default(false)
+
+  resolution      String?  @db.Text
+  refundAmount    Int?
+  refundProcessed Boolean  @default(false)
+
+  rawConversation Json
+
+  escalationCount Int       @default(0)
+  lastEscalatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  timeline      TimelineEntry[]
+  escalations   Escalation[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, customerId])
+  @@index([routeToDeptId, status])
+  @@index([currentActorId])
+  @@index([status, slaDeadline])
+  @@index([createdAt])
+
+  shopifyOrderId    String?
+  shopifyOrderNumber String?
+  refundInitiated   Boolean  @default(false)
+  refundInitiatedAt DateTime?
+  razorpayRefundId  String?
+  autoResolved      Boolean  @default(false)  // true if AI resolved without human
+  autoResolveReason String?
+}
+
+model TimelineEntry {
+  id String @id @default(cuid())
+
+  reportId String
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  actorId   String
+  actor     User   @relation(fields: [actorId], references: [id])
+  actorRole Role
+
+  fromStatus  ReportStatus?
+  toStatus    ReportStatus
+  note        String?  @db.Text
+  actionTaken String?
+
+  isSystemEntry Boolean @default(false)
+  ipAddress     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([reportId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model Escalation {
+  id String @id @default(cuid())
+
+  reportId String
+  report   Report @relation(fields: [reportId], references: [id])
+
+  escalatedById    String
+  escalatedBy      User   @relation("EscalationBy", fields: [escalatedById], references: [id])
+  escalationReason String @db.Text
+
+  resolvedById   String?
+  resolvedBy     User?              @relation("EscalationResolver", fields: [resolvedById], references: [id])
+  resolvedAt     DateTime?
+  resolutionNote String?            @db.Text
+  decision       EscalationDecision?
+
+  level Int @default(1)
+
+  createdAt DateTime @default(now())
+
+  @@index([reportId])
+  @@index([escalatedById])
+}
+
+enum ReportStatus {
+  DRAFT
+  PENDING_CDA
+  INFO_REQUESTED
+  APPROVED_TO_DEPT
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  ESCALATED
+  RESOLVED
+  CLOSED
+  AUTO_RESOLVED
+}
+
+enum IssueType {
+  REFUND
+  DATA_CHANGE
+  COMPLAINT
+  OTHER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum EscalationDecision {
+  OVERRIDE_APPROVE
+  UPHOLD_CLOSE
+  NEEDS_MORE_INFO
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ─── P4 OWNS — Notifications + Audit ───────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+model Notification {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  reportId String?
+  report   Report? @relation(fields: [reportId], references: [id])
+
+  type    NotificationType
+  title   String
+  message String           @db.Text
+  read    Boolean          @default(false)
+  readAt  DateTime?
+
+  emailSent   Boolean   @default(false)
+  emailSentAt DateTime?
+  emailId     String?
+
+  actionUrl String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@index([reportId])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  action     String
+  entityType String
+  entityId   String
+
+  actorId    String?
+  actorEmail String?
+  actorRole  String?
+
+  before Json?
+  after  Json?
+
+  ipAddress String?
+  userAgent String?
+
+  reportId String?
+  report   Report? @relation(fields: [reportId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, action])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model Webhook {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  url    String
+  secret String
+  events String[]
+  isActive Boolean @default(true)
+
+  lastTriggeredAt  DateTime?
+  lastSucceededAt  DateTime?
+  lastFailedAt     DateTime?
+  consecutiveFails Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+enum NotificationType {
+  REPORT_SUBMITTED
+  REPORT_APPROVED
+  REPORT_REJECTED
+  REPORT_COMPLETED
+  REPORT_ESCALATED
+  REPORT_RESOLVED
+  REPORT_CLOSED
+  INFO_REQUESTED
+  SLA_WARNING
+  SLA_BREACHED
+  NEW_REPORT_ASSIGNED
+  AUTO_REFUND_PROCESSED
+}
+
+model CachedOrder {
+  id              String   @id @default(cuid())
+  tenantId        String
+  shopifyOrderId  String
+  orderNumber     String   // e.g. "#4521"
+  customerEmail   String
+  customerName    String
+  totalAmount     Int      // in paise
+  currency        String   @default("INR")
+  lineItems       Json     // array of products
+  fulfillmentStatus String
+  financialStatus String
+  createdAt       DateTime // order placed date
+  cachedAt        DateTime @default(now())
+
+  @@unique([tenantId, shopifyOrderId])
+  @@index([tenantId, orderNumber])
+}
+
+model ReturnPolicy {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  returnWindowDays Int     @default(7)
+  autoApproveBelow Int     @default(100000)  // paise — auto approve if refund < ₹1000
+  autoApproveConfidence Float @default(0.90) // AI confidence threshold
+  allowedReasons  String[] // ["damaged","wrong_item","not_delivered","defective"]
+  nonReturnableCategories String[] // ["groceries","innerwear"]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
