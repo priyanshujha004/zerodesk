@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
-const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:3000/api';
+const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:3000';
 
 async function proxyRequest(req: NextRequest, path: string) {
   const cookieStore = cookies();
@@ -12,7 +12,7 @@ async function proxyRequest(req: NextRequest, path: string) {
 
   const isStream = path === 'chat/message' || path === 'chat/gemini-message';
 
-  const upstream = await fetch(`${BACKEND}/${path}`, {
+  const upstream = await fetch(`${BACKEND}/api/${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
