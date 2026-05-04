@@ -2,6 +2,8 @@
 // apps/dashboard/src/app/page.tsx
 
 import Link from 'next/link';
+// Add this import at the top with the other imports
+import FloatingWidget from '@/components/chat/FloatingWidget';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -454,6 +456,8 @@ export default function LandingPage() {
           </span>
         </div>
       </footer>
+      {/* ── Chat Widget ────────────────────────────────────────────── */}
+      <FloatingWidget />
     </div>
   );
 }
