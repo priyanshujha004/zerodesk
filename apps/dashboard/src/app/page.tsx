@@ -1,463 +1,826 @@
-// TODO P4 — landing page
-// apps/dashboard/src/app/page.tsx
+'use client';
 
-import Link from 'next/link';
-// Add this import at the top with the other imports
-import FloatingWidget from '@/components/chat/FloatingWidget';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+/* ─── Auth drawer ─────────────────────────────────────────── */
+type AuthTab = 'signin' | 'register';
 
-interface FeatureCard {
-  icon: string;
-  title: string;
-  desc: string;
-  highlight?: boolean;
-}
+const ROLE_ROUTES: Record<string, string> = {
+  CDA:         '/dashboard/cda',
+  DEPT_ADMIN:  '/dashboard/dept',
+  SUPER_ADMIN: '/dashboard/superadmin',
+  CUSTOMER:    '/chat',
+};
 
-interface PricingTier {
-  name: string;
-  price: string;
-  sub: string;
-  features: string[];
-  cta: string;
-  highlight?: boolean;
-}
+function AuthDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const router = useRouter();
+  const [tab, setTab]           = useState<AuthTab>('signin');
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const [success, setSuccess]   = useState<string | null>(null);
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
+  /* Sign-in state */
+  const [siEmail, setSiEmail]       = useState('');
+  const [siPassword, setSiPassword] = useState('');
 
-const FEATURES: FeatureCard[] = [
-  {
-    icon: '🛍️',
-    title: 'Shopify Integration',
-    desc: 'One-line embed. Syncs orders, policies, and customer data automatically.',
-  },
-  {
-    icon: '🤖',
-    title: 'AI Eligibility Check',
-    desc: 'Checks return window, product condition, and policy rules in milliseconds.',
-    highlight: true,
-  },
-  {
-    icon: '⚡',
-    title: 'Instant Razorpay Refund',
-    desc: 'Approved returns trigger refunds automatically — no human needed.',
-    highlight: true,
-  },
-  {
-    icon: '🗂️',
-    title: 'Human Override Queue',
-    desc: 'The hard 20% land cleanly in your team dashboard, fully context-loaded.',
-  },
-  {
-    icon: '📋',
-    title: 'Full Audit Trail',
-    desc: 'Every decision, timestamped. Built-in SLA tracking and escalation.',
-  },
-  {
-    icon: '🔌',
-    title: '1-Line Embed',
-    desc: 'Drop one script tag into your Shopify theme. Live in under 5 minutes.',
-  },
-];
+  /* Register state */
+  const [rName, setRName]         = useState('');
+  const [rEmail, setREmail]       = useState('');
+  const [rPassword, setRPassword] = useState('');
+  const [rConfirm, setRConfirm]   = useState('');
 
-const PRICING: PricingTier[] = [
-  {
-    name: 'Starter',
-    price: '₹2,999',
-    sub: 'per month',
-    features: [
-      '500 returns / month',
-      'Shopify + Razorpay',
-      'AI auto-resolution',
-      'Email notifications',
-      '7-day audit history',
-    ],
-    cta: 'Start free trial',
-  },
-  {
-    name: 'Growth',
-    price: '₹9,999',
-    sub: 'per month',
-    features: [
-      '5,000 returns / month',
-      'Everything in Starter',
-      'Priority SLA routing',
-      'Department workflows',
-      'Unlimited audit history',
-      'Dedicated Slack support',
-    ],
-    cta: 'Get Growth',
-    highlight: true,
-  },
-  {
-    name: 'Enterprise',
-    price: 'Custom',
-    sub: 'volume pricing',
-    features: [
-      'Unlimited returns',
-      'Everything in Growth',
-      'SSO / SAML',
-      'Custom AI policy rules',
-      'White-label option',
-      'Dedicated success manager',
-    ],
-    cta: 'Contact sales',
-  },
-];
+  /* Reset on tab switch */
+  useEffect(() => { setError(null); setSuccess(null); }, [tab]);
 
-const STEPS = [
-  {
-    n: '01',
-    title: 'Customer opens chat',
-    desc: 'Enters their order number. No account needed.',
-  },
-  {
-    n: '02',
-    title: 'AI fetches & checks',
-    desc: 'Pulls the order from Shopify, applies your return policy rules.',
-  },
-  {
-    n: '03',
-    title: 'Instant refund',
-    desc: 'Eligible returns are refunded via Razorpay in under 90 seconds.',
-  },
-  {
-    n: '04',
-    title: 'Exceptions escalated',
-    desc: 'Edge cases go to your team — fully tracked, SLA-managed.',
-  },
-];
+  async function handleSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    if (!siEmail || !siPassword) { setError('Both fields required.'); return; }
+    setLoading(true); setError(null);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: siEmail, password: siPassword }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { message?: string };
+        throw new Error(d.message ?? 'Invalid credentials');
+      }
+      const data = await res.json() as { accessToken?: string; role?: string };
+      if (data.accessToken) localStorage.setItem('access_token', data.accessToken);
+      router.push(ROLE_ROUTES[data.role ?? ''] ?? '/dashboard/cda');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Sign in failed');
+    } finally { setLoading(false); }
+  }
 
-const FAKE_STORES = [
-  'Zara India',
-  'Meesho Picks',
-  'The Souled Store',
-  'Bewakoof',
-  'Myntra Sellers',
-  'Nykaa Fashion',
-];
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault();
+    if (!rName || !rEmail || !rPassword) { setError('All fields required.'); return; }
+    if (rPassword !== rConfirm) { setError('Passwords do not match.'); return; }
+    if (rPassword.length < 8)  { setError('Password must be at least 8 characters.'); return; }
+    setLoading(true); setError(null);
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name: rName, email: rEmail, password: rPassword }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { message?: string };
+        throw new Error(d.message ?? 'Registration failed');
+      }
+      setSuccess('Account created. Sign in to continue.');
+      setTab('signin');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Registration failed');
+    } finally { setLoading(false); }
+  }
 
-// ─── Subcomponents ────────────────────────────────────────────────────────────
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    background: '#111111',
+    border: '1px solid #262626',
+    borderRadius: '6px',
+    padding: '10px 14px',
+    fontSize: '14px',
+    color: '#ffffff',
+    outline: 'none',
+    transition: 'border-color 0.12s',
+    fontFamily: 'Inter, sans-serif',
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: '11px',
+    fontWeight: 500,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase' as const,
+    color: '#737373',
+    display: 'block',
+    marginBottom: '6px',
+  };
 
-function StatBadge({ value, label }: { value: string; label: string }) {
   return (
-    <div className="text-center">
-      <div className="text-3xl sm:text-4xl font-black text-emerald-400 tabular-nums leading-none">
-        {value}
-      </div>
-      <div className="text-xs sm:text-sm text-gray-500 mt-1 font-medium">
-        {label}
-      </div>
-    </div>
-  );
-}
+    <>
+      {/* Overlay */}
+      <div
+        style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,0,0,0.6)',
+          zIndex: 300,
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? 'all' : 'none',
+          transition: 'opacity 0.25s ease',
+          backdropFilter: 'blur(3px)',
+        }}
+        onClick={onClose}
+      />
 
-function Feature({ card }: { card: FeatureCard }) {
-  return (
-    <div
-      className={`rounded-2xl p-6 border transition-all duration-300 group hover:-translate-y-1 ${
-        card.highlight
-          ? 'border-emerald-500/40 bg-emerald-500/5 hover:bg-emerald-500/10'
-          : 'border-white/5 bg-[#12121a] hover:border-white/10'
-      }`}
-    >
-      <div className="text-3xl mb-4">{card.icon}</div>
-      <h3 className="text-base font-bold text-white mb-2">{card.title}</h3>
-      <p className="text-sm text-gray-500 leading-relaxed">{card.desc}</p>
-    </div>
-  );
-}
-
-function PricingCard({ tier }: { tier: PricingTier }) {
-  return (
-    <div
-      className={`relative rounded-2xl p-7 flex flex-col border transition-all duration-300 ${
-        tier.highlight
-          ? 'border-emerald-500/50 bg-emerald-500/5 scale-[1.02]'
-          : 'border-white/5 bg-[#12121a]'
-      }`}
-    >
-      {tier.highlight && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="bg-emerald-500 text-black text-xs font-bold px-3 py-1 rounded-full">
-            MOST POPULAR
-          </span>
-        </div>
-      )}
-
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">
-          {tier.name}
-        </h3>
-        <div className="flex items-baseline gap-1">
-          <span className="text-4xl font-black text-white">{tier.price}</span>
-          <span className="text-gray-500 text-sm">{tier.sub}</span>
-        </div>
-      </div>
-
-      <ul className="space-y-2.5 flex-1 mb-8">
-        {tier.features.map((f) => (
-          <li key={f} className="flex items-center gap-2 text-sm text-gray-400">
-            <svg
-              className="h-3.5 w-3.5 text-emerald-500 shrink-0"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414L8.414 15l-4.121-4.121a1 1 0 111.414-1.414L8.414 12.172l7.879-7.879a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-            {f}
-          </li>
-        ))}
-      </ul>
-
-      <Link
-        href="/register"
-        className={`text-center text-sm font-semibold py-3 rounded-xl transition-all ${
-          tier.highlight
-            ? 'bg-emerald-500 text-black hover:bg-emerald-400'
-            : 'border border-white/10 text-white hover:border-white/30'
-        }`}
+      {/* Drawer */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 0, right: 0, bottom: 0,
+          width: '420px',
+          background: '#000000',
+          borderLeft: '1px solid #262626',
+          zIndex: 301,
+          transform: open ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto',
+        }}
       >
-        {tier.cta}
-      </Link>
+        {/* Drawer header */}
+        <div style={{
+          padding: '20px 32px',
+          borderBottom: '1px solid #1a1a1a',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '16px', fontWeight: 600, color: '#ffffff' }}>
+            ZeroDesk
+          </span>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none', border: '1px solid #262626',
+              borderRadius: '6px', cursor: 'pointer',
+              width: '32px', height: '32px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#737373', fontSize: '16px', transition: 'color 0.12s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#ffffff')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#737373')}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Tab switcher */}
+        <div style={{ padding: '24px 32px 0' }}>
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1fr 1fr',
+            border: '1px solid #1a1a1a', borderRadius: '8px',
+            padding: '3px', gap: '3px',
+            background: '#0a0a0a',
+          }}>
+            {(['signin', 'register'] as AuthTab[]).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                style={{
+                  padding: '8px',
+                  borderRadius: '6px',
+                  border: 'none', cursor: 'pointer',
+                  background: tab === t ? '#ffffff' : 'transparent',
+                  color: tab === t ? '#000000' : '#737373',
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: '13px', fontWeight: tab === t ? 500 : 400,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {t === 'signin' ? 'Sign in' : 'Create account'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Form area */}
+        <div style={{ padding: '32px', flex: 1 }}>
+
+          {success && (
+            <div style={{
+              padding: '12px 14px', marginBottom: '20px',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid #262626', borderRadius: '6px',
+              fontSize: '13px', color: '#a3a3a3',
+            }}>
+              {success}
+            </div>
+          )}
+
+          {error && (
+            <div style={{
+              padding: '12px 14px', marginBottom: '20px',
+              background: 'rgba(248,113,113,0.05)',
+              border: '1px solid rgba(248,113,113,0.2)', borderRadius: '6px',
+              fontSize: '13px', color: '#f87171',
+            }}>
+              {error}
+            </div>
+          )}
+
+          {/* Sign in form */}
+          {tab === 'signin' && (
+            <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div>
+                <label style={labelStyle}>Email address</label>
+                <input
+                  style={inputStyle}
+                  type="email" placeholder="you@example.com"
+                  value={siEmail} onChange={e => setSiEmail(e.target.value)}
+                  autoComplete="email"
+                  onFocus={e => (e.target.style.borderColor = '#404040')}
+                  onBlur={e => (e.target.style.borderColor = '#262626')}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Password</label>
+                <input
+                  style={inputStyle}
+                  type="password" placeholder="••••••••"
+                  value={siPassword} onChange={e => setSiPassword(e.target.value)}
+                  autoComplete="current-password"
+                  onFocus={e => (e.target.style.borderColor = '#404040')}
+                  onBlur={e => (e.target.style.borderColor = '#262626')}
+                />
+              </div>
+              <button
+                type="submit" disabled={loading}
+                style={{
+                  marginTop: '8px',
+                  padding: '11px 20px',
+                  background: loading ? '#1a1a1a' : '#ffffff',
+                  color: '#000000',
+                  border: 'none', borderRadius: '6px', cursor: loading ? 'not-allowed' : 'pointer',
+                  fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 500,
+                  transition: 'background 0.12s',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                }}
+                onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#d4d4d4'; }}
+                onMouseLeave={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#ffffff'; }}
+              >
+                {loading && (
+                  <span style={{
+                    width: '13px', height: '13px',
+                    border: '2px solid #888', borderTopColor: 'transparent',
+                    borderRadius: '50%', display: 'inline-block',
+                    animation: 'spin 0.6s linear infinite',
+                  }} />
+                )}
+                {loading ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
+          )}
+
+          {/* Register form */}
+          {tab === 'register' && (
+            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {[
+                { label: 'Full name',         type: 'text',     ph: 'Rohan Sharma',    val: rName,     set: setRName,     ac: 'name' },
+                { label: 'Email address',     type: 'email',    ph: 'you@example.com', val: rEmail,    set: setREmail,    ac: 'email' },
+                { label: 'Password',          type: 'password', ph: '8+ characters',   val: rPassword, set: setRPassword, ac: 'new-password' },
+                { label: 'Confirm password',  type: 'password', ph: 'Repeat password', val: rConfirm,  set: setRConfirm,  ac: 'new-password' },
+              ].map(f => (
+                <div key={f.label}>
+                  <label style={labelStyle}>{f.label}</label>
+                  <input
+                    style={inputStyle}
+                    type={f.type} placeholder={f.ph}
+                    value={f.val} onChange={e => f.set(e.target.value)}
+                    autoComplete={f.ac}
+                    onFocus={e => (e.target.style.borderColor = '#404040')}
+                    onBlur={e => (e.target.style.borderColor = '#262626')}
+                  />
+                </div>
+              ))}
+              <button
+                type="submit" disabled={loading}
+                style={{
+                  marginTop: '4px',
+                  padding: '11px 20px',
+                  background: loading ? '#1a1a1a' : '#ffffff',
+                  color: '#000000',
+                  border: 'none', borderRadius: '6px', cursor: loading ? 'not-allowed' : 'pointer',
+                  fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 500,
+                  transition: 'background 0.12s',
+                }}
+                onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#d4d4d4'; }}
+                onMouseLeave={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#ffffff'; }}
+              >
+                {loading ? 'Creating…' : 'Create account'}
+              </button>
+            </form>
+          )}
+        </div>
+
+        {/* Role guide at the bottom */}
+        <div style={{ padding: '24px 32px', borderTop: '1px solid #1a1a1a' }}>
+          <p style={{ fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', color: '#404040', marginBottom: '12px' }}>
+            Role access
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {[
+              { role: 'Customer',    desc: 'Raise & track complaints' },
+              { role: 'CDA',         desc: 'Review & route reports' },
+              { role: 'Dept Admin',  desc: 'Resolve department queue' },
+              { role: 'Super Admin', desc: 'Handle escalations' },
+            ].map(r => (
+              <div key={r.role} style={{ display: 'flex', gap: '12px', alignItems: 'baseline' }}>
+                <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', fontWeight: 500, color: '#a3a3a3', minWidth: '88px' }}>
+                  {r.role}
+                </span>
+                <span style={{ fontSize: '12px', color: '#404040' }}>{r.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </>
+  );
+}
+
+/* ─── Hamburger button ─────────────────────────────────────── */
+function HamburgerBtn({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Open menu"
+      style={{
+        width: '36px', height: '36px',
+        background: 'none',
+        border: '1px solid #262626',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: '5px', padding: '0',
+        transition: 'border-color 0.12s',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = '#404040')}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = '#262626')}
+    >
+      {[0, 1, 2].map(i => (
+        <span key={i} style={{
+          display: 'block',
+          width: open
+            ? i === 1 ? '0px' : '14px'
+            : '14px',
+          height: '1px',
+          background: '#ffffff',
+          transition: 'width 0.2s ease, transform 0.2s ease, opacity 0.2s ease',
+          transform: open
+            ? i === 0 ? 'translateY(6px) rotate(45deg)' : i === 2 ? 'translateY(-6px) rotate(-45deg)' : 'none'
+            : 'none',
+          opacity: open && i === 1 ? 0 : 1,
+        }} />
+      ))}
+    </button>
+  );
+}
+
+/* ─── Section heading ──────────────────────────────────────── */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{
+      fontSize: '11px', fontWeight: 500, letterSpacing: '0.1em',
+      textTransform: 'uppercase', color: '#737373', marginBottom: '20px',
+    }}>
+      {children}
+    </p>
+  );
+}
+
+/* ─── Feature row ──────────────────────────────────────────── */
+function Feature({ title, desc, index }: { title: string; desc: string; index: number }) {
+  return (
+    <div style={{
+      padding: '28px 0',
+      borderBottom: '1px solid #1a1a1a',
+      display: 'grid', gridTemplateColumns: '32px 1fr 2fr',
+      gap: '24px', alignItems: 'start',
+      animation: `fadeUp 0.4s ease ${index * 60}ms both`,
+    }}>
+      <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: '#404040', paddingTop: '2px', fontVariantNumeric: 'tabular-nums' }}>
+        {String(index + 1).padStart(2, '0')}
+      </span>
+      <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '15px', fontWeight: 500, color: '#ffffff', lineHeight: 1.3 }}>
+        {title}
+      </span>
+      <span style={{ fontSize: '13px', color: '#737373', lineHeight: 1.6 }}>
+        {desc}
+      </span>
     </div>
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
-export default function LandingPage() {
+/* ─── Process step ─────────────────────────────────────────── */
+function ProcessStep({ label, sub, last }: { label: string; sub: string; last?: boolean }) {
   return (
-    <div
-      className="min-h-screen text-white"
-      style={{ background: '#0a0a0f', fontFamily: 'system-ui, sans-serif' }}
-    >
-      {/* ── Navbar ─────────────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-50 border-b border-white/5 backdrop-blur bg-[#0a0a0f]/80">
-        <div className="max-w-6xl mx-auto px-4 sm:px-8 h-14 flex items-center justify-between">
-          <span className="font-black text-lg tracking-tight">
-            Resolve<span className="text-emerald-400">IQ</span>
-          </span>
-          <div className="flex items-center gap-4">
-            <Link
-              href="#pricing"
-              className="text-sm text-gray-400 hover:text-white hidden sm:block"
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <div style={{
+        border: '1px solid #262626',
+        borderRadius: '8px',
+        padding: '14px 20px',
+        background: '#111111',
+        minWidth: '160px',
+      }}>
+        <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', fontWeight: 500, color: '#ffffff' }}>{label}</p>
+        <p style={{ fontSize: '11px', color: '#737373', marginTop: '3px' }}>{sub}</p>
+      </div>
+      {!last && (
+        <div style={{ width: '1px', height: '28px', background: '#262626', margin: '0 auto' }} />
+      )}
+    </div>
+  );
+}
+
+/* ─── Main ─────────────────────────────────────────────────── */
+export default function LandingPage() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  /* Lock scroll when drawer open */
+  useEffect(() => {
+    document.body.style.overflow = drawerOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [drawerOpen]);
+
+  return (
+    <div style={{ background: '#000000', color: '#ffffff', fontFamily: 'Inter, sans-serif', minHeight: '100vh' }}>
+
+      {/* ── NAV ── */}
+      <nav style={{
+        position: 'fixed', top: 0, left: 0, right: 0,
+        height: '56px',
+        borderBottom: '1px solid #1a1a1a',
+        background: 'rgba(0,0,0,0.9)',
+        backdropFilter: 'blur(12px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 48px',
+        zIndex: 100,
+      }}>
+        <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '15px', fontWeight: 600, letterSpacing: '-0.01em', color: '#ffffff' }}>
+          ZeroDesk
+        </span>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+          {['Product', 'Workflow', 'Roles'].map(item => (
+            <a key={item} href={`#${item.toLowerCase()}`} style={{ fontSize: '13px', color: '#737373', transition: 'color 0.12s' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#ffffff')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#737373')}
             >
-              Pricing
-            </Link>
-            <Link
-              href="/login"
-              className="text-sm text-gray-400 hover:text-white hidden sm:block"
-            >
-              Login
-            </Link>
-            <Link
-              href="/register"
-              className="bg-emerald-500 text-black text-sm font-bold px-4 py-2 rounded-lg hover:bg-emerald-400 transition-colors"
-            >
-              Get started
-            </Link>
-          </div>
+              {item}
+            </a>
+          ))}
+          <div style={{ width: '1px', height: '16px', background: '#262626' }} />
+          <HamburgerBtn open={drawerOpen} onClick={() => setDrawerOpen(o => !o)} />
         </div>
       </nav>
 
-      {/* ── Hero ───────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden">
-        {/* Glow blob */}
-        <div
-          className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full opacity-20"
-          style={{
-            background:
-              'radial-gradient(ellipse, #6ee7b7 0%, transparent 70%)',
-            filter: 'blur(80px)',
-          }}
-        />
+      {/* ── HERO ── */}
+      <section style={{
+        paddingTop: '56px',
+        minHeight: '100vh',
+        display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        padding: '128px 48px 96px',
+        borderBottom: '1px solid #1a1a1a',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        {/* Background grid — very subtle */}
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          backgroundImage: 'linear-gradient(#1a1a1a 1px, transparent 1px), linear-gradient(90deg, #1a1a1a 1px, transparent 1px)',
+          backgroundSize: '64px 64px',
+          opacity: 0.3,
+          maskImage: 'radial-gradient(ellipse at 50% 0%, black 0%, transparent 70%)',
+        }} />
 
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-8 pt-24 pb-20 text-center">
-          {/* Eyebrow */}
-          <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-8 text-xs font-semibold text-emerald-400 uppercase tracking-widest">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            AI-powered returns for Shopify
+        <div style={{ position: 'relative', maxWidth: '900px' }}>
+          <div
+            className="animate-fade-up"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '8px',
+              border: '1px solid #262626', borderRadius: '4px',
+              padding: '4px 12px', marginBottom: '40px',
+              background: '#111111',
+            }}
+          >
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', display: 'inline-block' }} />
+            <span style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#a3a3a3' }}>
+              AI-assisted support operations
+            </span>
           </div>
 
-          <h1 className="text-5xl sm:text-7xl font-black leading-[1.05] tracking-tight mb-6">
-            Returns resolved
-            <br />
-            <span className="text-emerald-400">in 90 seconds.</span>
+          <h1
+            className="animate-fade-up d-100"
+            style={{
+              fontFamily: 'Space Grotesk, sans-serif',
+              fontSize: 'clamp(52px, 8vw, 104px)',
+              fontWeight: 700,
+              lineHeight: 0.9,
+              letterSpacing: '-0.035em',
+              color: '#ffffff',
+              marginBottom: '32px',
+            }}
+          >
+            Customer support,<br />
+            <span style={{ color: '#404040' }}>without the chaos.</span>
           </h1>
 
-          <p className="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            AI handles{' '}
-            <span className="text-white font-semibold">
-              80% of e-commerce returns
-            </span>{' '}
-            automatically. Your team only sees the hard 20%.
+          <p
+            className="animate-fade-up d-200"
+            style={{
+              fontSize: '16px', color: '#737373', lineHeight: 1.7,
+              maxWidth: '540px', marginBottom: '48px',
+            }}
+          >
+            ZeroDesk helps teams collect, classify, route, and resolve customer issues through structured workflows and AI-assisted intake.
           </p>
 
-          <div className="flex flex-wrap justify-center gap-3 mb-16">
-            <Link
-              href="/register"
-              className="bg-emerald-500 text-black font-bold text-base px-7 py-3.5 rounded-xl hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
+          <div className="animate-fade-up d-300" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button
+              onClick={() => setDrawerOpen(true)}
+              style={{
+                padding: '11px 24px',
+                background: '#ffffff', color: '#000000',
+                border: 'none', borderRadius: '6px',
+                fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 500,
+                cursor: 'pointer', transition: 'background 0.12s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#d4d4d4')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#ffffff')}
             >
-              Add to your Shopify store →
-            </Link>
-            <Link
-              href="#how"
-              className="border border-white/10 text-white text-base px-7 py-3.5 rounded-xl hover:border-white/30 transition-all"
+              Get started
+            </button>
+            <a
+              href="#product"
+              style={{
+                padding: '11px 24px',
+                background: 'transparent', color: '#a3a3a3',
+                border: '1px solid #262626', borderRadius: '6px',
+                fontFamily: 'Inter, sans-serif', fontSize: '14px',
+                cursor: 'pointer', transition: 'all 0.12s', textDecoration: 'none',
+                display: 'inline-flex',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#ffffff'; (e.currentTarget as HTMLAnchorElement).style.borderColor = '#404040'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#a3a3a3'; (e.currentTarget as HTMLAnchorElement).style.borderColor = '#262626'; }}
             >
-              See how it works
-            </Link>
+              See how it works ↓
+            </a>
           </div>
+        </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-8 max-w-sm mx-auto border border-white/5 rounded-2xl bg-[#12121a] p-6">
-            <StatBadge value="80%" label="auto-resolved" />
-            <StatBadge value="90s" label="avg resolution" />
-            <StatBadge value="₹0" label="staff cost" />
+        {/* Mock product preview */}
+        <div
+          className="animate-fade-up d-500"
+          style={{
+            marginTop: '80px',
+            position: 'relative',
+            maxWidth: '780px',
+          }}
+        >
+          {/* Window chrome */}
+          <div style={{
+            border: '1px solid #262626', borderRadius: '12px', overflow: 'hidden',
+            boxShadow: '0 0 0 1px #1a1a1a, 0 32px 64px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{
+              background: '#111111', borderBottom: '1px solid #262626',
+              padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px',
+            }}>
+              {['#ff5f57','#febc2e','#28c840'].map(c => (
+                <span key={c} style={{ width: '10px', height: '10px', borderRadius: '50%', background: c, opacity: 0.6 }} />
+              ))}
+              <span style={{ marginLeft: '8px', fontSize: '12px', color: '#404040', fontFamily: 'Space Grotesk, sans-serif' }}>
+                ZeroDesk — CDA Dashboard
+              </span>
+            </div>
+
+            {/* Simulated table */}
+            <div style={{ background: '#0a0a0a', padding: '0' }}>
+              {/* Table header */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: '40px 2fr 1fr 1fr 1fr 80px',
+                padding: '10px 20px', borderBottom: '1px solid #1a1a1a',
+                gap: '16px',
+              }}>
+                {['#', 'Report', 'Type', 'Priority', 'SLA', 'Status'].map(h => (
+                  <span key={h} style={{ fontSize: '11px', color: '#404040', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'Space Grotesk, sans-serif' }}>
+                    {h}
+                  </span>
+                ))}
+              </div>
+
+              {[
+                { id: 'A4F2', summary: 'Order not delivered — want refund', type: 'REFUND', pri: 'HIGH', sla: '2h 14m', status: 'PENDING' },
+                { id: 'B7C1', summary: 'Wrong item received, need replacement', type: 'COMPLAINT', pri: 'MEDIUM', sla: '11h 40m', status: 'PENDING' },
+                { id: 'C9E3', summary: 'Account email change request', type: 'DATA', pri: 'LOW', sla: '58h 20m', status: 'INFO REQ' },
+              ].map((r, i) => (
+                <div key={r.id} style={{
+                  display: 'grid', gridTemplateColumns: '40px 2fr 1fr 1fr 1fr 80px',
+                  padding: '14px 20px', borderBottom: i < 2 ? '1px solid #141414' : 'none',
+                  gap: '16px', alignItems: 'center',
+                }}>
+                  <span style={{ fontSize: '11px', color: '#303030', fontFamily: 'Space Grotesk, sans-serif' }}>
+                    {r.id}
+                  </span>
+                  <span style={{ fontSize: '13px', color: '#a3a3a3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.summary}
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#404040' }}>{r.type}</span>
+                  <span style={{
+                    fontSize: '11px', fontWeight: 500,
+                    color: r.pri === 'HIGH' ? '#f87171' : r.pri === 'MEDIUM' ? '#fbbf24' : '#737373',
+                  }}>{r.pri}</span>
+                  <span style={{ fontSize: '12px', color: '#404040', fontFamily: 'Space Grotesk, sans-serif' }}>{r.sla}</span>
+                  <span style={{
+                    fontSize: '11px', padding: '2px 8px',
+                    borderRadius: '4px', border: '1px solid #262626',
+                    background: '#111111', color: '#a3a3a3',
+                    fontFamily: 'Space Grotesk, sans-serif',
+                  }}>
+                    {r.status}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── How it works ───────────────────────────────────────────── */}
-      <section id="how" className="max-w-6xl mx-auto px-4 sm:px-8 py-24">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-black mb-4">
-            How it works
+      {/* ── PRODUCT FEATURES ── */}
+      <section id="product" style={{ padding: '96px 48px', borderBottom: '1px solid #1a1a1a' }}>
+        <SectionLabel>Product</SectionLabel>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '64px', alignItems: 'start' }}>
+          <h2 style={{
+            fontFamily: 'Space Grotesk, sans-serif',
+            fontSize: 'clamp(32px, 4vw, 52px)',
+            fontWeight: 700, lineHeight: 1.05,
+            letterSpacing: '-0.025em', color: '#ffffff',
+          }}>
+            Everything a support team needs. Nothing it doesn't.
           </h2>
-          <p className="text-gray-500 max-w-xl mx-auto">
-            From customer request to refund in your bank — fully automated.
-          </p>
+          <div>
+            {[
+              { title: 'AI-Assisted Intake', desc: 'The AI conducts the intake conversation, structures the issue, and proposes a resolution path — no agent input required.' },
+              { title: 'Automated Classification', desc: 'Issue type, priority tier, and target department are determined in under two seconds with a confidence score attached.' },
+              { title: 'Department Routing', desc: 'Reports move directly to the right department once a CDA approves. No manual assignment, no ambiguity.' },
+              { title: 'Escalation Tracking', desc: 'Customers can escalate rejected reports to SuperAdmin with a full auto-generated case summary pre-attached.' },
+              { title: 'Audit Timeline', desc: 'Every status change, every actor, every note — logged automatically. Immutable trail from intake to close.' },
+              { title: 'Multi-Tenant Management', desc: 'Each business runs in a fully isolated context. Routing rules, departments, and AI personas configured per tenant.' },
+            ].map((f, i) => <Feature key={f.title} {...f} index={i} />)}
+          </div>
         </div>
+      </section>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {STEPS.map((step, i) => (
-            <div
-              key={step.n}
-              className="relative rounded-2xl border border-white/5 bg-[#12121a] p-6"
-            >
-              {/* Step connector line */}
-              {i < STEPS.length - 1 && (
-                <div className="hidden lg:block absolute right-0 top-1/2 w-4 h-px bg-white/10 -translate-y-1/2 translate-x-full z-10" />
-              )}
-              <div className="text-5xl font-black text-white/5 mb-4 leading-none">
-                {step.n}
+      {/* ── WORKFLOW ── */}
+      <section id="workflow" style={{ padding: '96px 48px', borderBottom: '1px solid #1a1a1a', background: '#080808' }}>
+        <SectionLabel>Workflow</SectionLabel>
+        <h2 style={{
+          fontFamily: 'Space Grotesk, sans-serif',
+          fontSize: 'clamp(28px, 3vw, 44px)',
+          fontWeight: 700, lineHeight: 1.1,
+          letterSpacing: '-0.025em', color: '#ffffff',
+          marginBottom: '64px', maxWidth: '480px',
+        }}>
+          From complaint to resolution. Structured, every time.
+        </h2>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0' }}>
+          {[
+            { label: 'Customer Intake', sub: 'AI-conducted conversation' },
+            { label: 'Structured Report', sub: 'Classified & prioritised' },
+            { label: 'CDA Review', sub: 'Approve / reject / request info' },
+            { label: 'Department Action', sub: 'SLA-tracked resolution' },
+            { label: 'Resolution', sub: 'Closed with full audit trail' },
+          ].map((s, i, arr) => (
+            <ProcessStep key={s.label} label={s.label} sub={s.sub} last={i === arr.length - 1} />
+          ))}
+        </div>
+      </section>
+
+      {/* ── ROLES ── */}
+      <section id="roles" style={{ padding: '96px 48px', borderBottom: '1px solid #1a1a1a' }}>
+        <SectionLabel>Roles</SectionLabel>
+        <h2 style={{
+          fontFamily: 'Space Grotesk, sans-serif',
+          fontSize: 'clamp(28px, 3vw, 44px)',
+          fontWeight: 700, lineHeight: 1.1,
+          letterSpacing: '-0.025em', color: '#ffffff',
+          marginBottom: '48px',
+        }}>
+          Four roles. Clear responsibilities.
+        </h2>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#1a1a1a', border: '1px solid #1a1a1a', borderRadius: '10px', overflow: 'hidden' }}>
+          {[
+            {
+              role: 'Customer',
+              abbr: 'CUS',
+              desc: 'Raises issues through the AI chat interface. Tracks status, responds to info requests, and escalates rejected outcomes.',
+              actions: ['Submit complaint', 'Track resolution', 'Escalate rejection'],
+            },
+            {
+              role: 'CDA',
+              abbr: 'CDA',
+              desc: 'Central Desk Analyst. Reviews AI-generated reports, approves routing to departments, or requests additional information.',
+              actions: ['Review reports', 'Approve to dept', 'Request info'],
+            },
+            {
+              role: 'Dept Admin',
+              abbr: 'DA',
+              desc: 'Takes ownership of approved reports within their department. Resolves issues and logs actions against SLA deadlines.',
+              actions: ['Action reports', 'Log resolution', 'Track SLA'],
+            },
+            {
+              role: 'Super Admin',
+              abbr: 'SA',
+              desc: 'Final resolution authority. Handles escalated cases with full case summary and audit trail auto-attached.',
+              actions: ['Handle escalations', 'Override decisions', 'Close cases'],
+            },
+          ].map(r => (
+            <div key={r.role} style={{ background: '#000000', padding: '32px 28px' }}>
+              <div style={{
+                display: 'inline-block',
+                fontFamily: 'Space Grotesk, sans-serif',
+                fontSize: '10px', fontWeight: 600,
+                letterSpacing: '0.1em', color: '#404040',
+                border: '1px solid #1a1a1a', borderRadius: '3px',
+                padding: '2px 7px', marginBottom: '16px',
+              }}>
+                {r.abbr}
               </div>
-              <h3 className="text-base font-bold text-white mb-2">
-                {step.title}
+              <h3 style={{
+                fontFamily: 'Space Grotesk, sans-serif', fontSize: '18px',
+                fontWeight: 600, color: '#ffffff', marginBottom: '10px',
+                letterSpacing: '-0.01em',
+              }}>
+                {r.role}
               </h3>
-              <p className="text-sm text-gray-500 leading-relaxed">
-                {step.desc}
+              <p style={{ fontSize: '13px', color: '#737373', lineHeight: 1.6, marginBottom: '20px' }}>
+                {r.desc}
               </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {r.actions.map(a => (
+                  <div key={a} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#404040', flexShrink: 0 }} />
+                    <span style={{ fontSize: '12px', color: '#a3a3a3' }}>{a}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── Features ───────────────────────────────────────────────── */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-8 py-12">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-black mb-4">
-            Everything you need
+      {/* ── CTA ── */}
+      <section style={{ padding: '96px 48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '48px', flexWrap: 'wrap', borderBottom: '1px solid #1a1a1a' }}>
+        <div>
+          <h2 style={{
+            fontFamily: 'Space Grotesk, sans-serif',
+            fontSize: 'clamp(32px, 4vw, 56px)',
+            fontWeight: 700, lineHeight: 1,
+            letterSpacing: '-0.025em', color: '#ffffff', marginBottom: '12px',
+          }}>
+            Ready to get started?
           </h2>
-          <p className="text-gray-500 max-w-xl mx-auto">
-            Built for Indian e-commerce. Razorpay-native.
-            Shopify-first.
+          <p style={{ fontSize: '15px', color: '#737373' }}>
+            Set up your team's workspace in minutes.
           </p>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {FEATURES.map((card) => (
-            <Feature key={card.title} card={card} />
-          ))}
-        </div>
+        <button
+          onClick={() => setDrawerOpen(true)}
+          style={{
+            padding: '13px 32px',
+            background: '#ffffff', color: '#000000',
+            border: 'none', borderRadius: '6px',
+            fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 500,
+            cursor: 'pointer', transition: 'background 0.12s', whiteSpace: 'nowrap',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = '#d4d4d4')}
+          onMouseLeave={e => (e.currentTarget.style.background = '#ffffff')}
+        >
+          Create account →
+        </button>
       </section>
 
-      {/* ── Social proof ───────────────────────────────────────────── */}
-      <section className="border-y border-white/5 py-10 my-12">
-        <div className="max-w-6xl mx-auto px-4 sm:px-8">
-          <p className="text-center text-xs font-semibold text-gray-600 uppercase tracking-widest mb-6">
-            Trusted by 50+ Shopify stores
-          </p>
-          <div className="flex flex-wrap justify-center items-center gap-x-10 gap-y-4">
-            {FAKE_STORES.map((store) => (
-              <span
-                key={store}
-                className="text-sm font-semibold text-gray-600 hover:text-gray-400 transition-colors cursor-default"
-              >
-                {store}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Pricing ────────────────────────────────────────────────── */}
-      <section id="pricing" className="max-w-6xl mx-auto px-4 sm:px-8 py-24">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-black mb-4">
-            Simple, honest pricing
-          </h2>
-          <p className="text-gray-500 max-w-xl mx-auto">
-            No per-return fees. No surprise charges. Cancel anytime.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 items-center">
-          {PRICING.map((tier) => (
-            <PricingCard key={tier.name} tier={tier} />
-          ))}
-        </div>
-      </section>
-
-      {/* ── Final CTA ──────────────────────────────────────────────── */}
-      <section className="max-w-4xl mx-auto px-4 sm:px-8 py-20 text-center">
-        <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-12">
-          <h2 className="text-3xl sm:text-5xl font-black mb-4">
-            Ready to automate
-            <br />
-            your returns?
-          </h2>
-          <p className="text-gray-500 mb-8 max-w-lg mx-auto">
-            Set up in under 5 minutes. Free 14-day trial.
-            No credit card required.
-          </p>
-          <Link
-            href="/register"
-            className="inline-block bg-emerald-500 text-black font-bold text-lg px-10 py-4 rounded-xl hover:bg-emerald-400 transition-all shadow-xl shadow-emerald-500/20"
-          >
-            Add to your Shopify store →
-          </Link>
-        </div>
-      </section>
-
-      {/* ── Footer ─────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/5 py-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="font-black text-base tracking-tight">
-            Resolve<span className="text-emerald-400">IQ</span>
-          </span>
-          <div className="flex gap-6 text-sm text-gray-600">
-            <Link href="#" className="hover:text-gray-400">
-              Privacy
-            </Link>
-            <Link href="#" className="hover:text-gray-400">
-              Terms
-            </Link>
-            <Link href="#" className="hover:text-gray-400">
-              Contact
-            </Link>
-          </div>
-          <span className="text-xs text-gray-700">
-            © 2026 ResolveIQ. Built for Indian commerce.
-          </span>
-        </div>
+      {/* ── FOOTER ── */}
+      <footer style={{ padding: '24px 48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: '#404040', fontWeight: 500 }}>
+          ZeroDesk
+        </span>
+        <span style={{ fontSize: '12px', color: '#303030' }}>
+          AI-assisted support workflow
+        </span>
       </footer>
-      {/* ── Chat Widget ────────────────────────────────────────────── */}
-      <FloatingWidget />
+
+      {/* Auth drawer */}
+      <AuthDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500&display=swap');
+        @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        .animate-fade-up { animation: fadeUp 0.5s ease both; }
+        .d-100 { animation-delay: 100ms; }
+        .d-200 { animation-delay: 200ms; }
+        .d-300 { animation-delay: 300ms; }
+        .d-500 { animation-delay: 500ms; }
+      `}</style>
     </div>
   );
 }

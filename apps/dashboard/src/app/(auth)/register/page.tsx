@@ -1,4 +1,5 @@
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
 
 
@@ -31,6 +32,8 @@ export default function RegisterPage() {
     setLoading(true);
 
 =======
+=======
+>>>>>>> Stashed changes
 'use client';
 
 import { useState } from 'react';
@@ -53,12 +56,16 @@ export default function RegisterPage() {
     if (form.password !== form.confirm) { setError('Passwords do not match.'); return; }
     if (form.password.length < 8) { setError('Password must be at least 8 characters.'); return; }
     setLoading(true); setError(null);
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
         body: JSON.stringify({ email, password, name }),
       });
@@ -72,6 +79,8 @@ export default function RegisterPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
 =======
+=======
+>>>>>>> Stashed changes
         body: JSON.stringify({ name: form.name, email: form.email, password: form.password }),
       });
       if (!res.ok) {
@@ -81,6 +90,9 @@ export default function RegisterPage() {
       router.push('/login?registered=1');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Registration failed');
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     } finally {
       setLoading(false);
@@ -88,6 +100,7 @@ export default function RegisterPage() {
   }
 
   return (
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
     <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f] px-4">
       {/* Background glow effects */}
@@ -219,6 +232,8 @@ export default function RegisterPage() {
   );
 }
 =======
+=======
+>>>>>>> Stashed changes
     <div
       style={{
         minHeight: '100vh',
@@ -416,5 +431,9 @@ export default function RegisterPage() {
       </div>
     </div>
   );
+<<<<<<< Updated upstream
+}
+>>>>>>> Stashed changes
+=======
 }
 >>>>>>> Stashed changes

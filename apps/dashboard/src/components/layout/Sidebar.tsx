@@ -1,119 +1,162 @@
 'use client';
 
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
-import { getUser, logout } from '../../lib/auth';
-import type { UserDto, NavItem, Role } from '../../types';
 
-const NAV_BY_ROLE: Record<Role, NavItem[]> = {
-  CUSTOMER: [
-    { label: 'My Returns', href: '/chat' },
-  ],
-  CDA: [
-    { label: 'Review Queue', href: '/dashboard/cda' },
-    { label: 'Auto-Resolved', href: '/dashboard/auto' },
-  ],
-  DEPT_ADMIN: [
-    { label: 'My Queue', href: '/dashboard/dept' },
-  ],
-  SUPER_ADMIN: [
-    { label: 'Escalations', href: '/dashboard/superadmin' },
-    { label: 'All Reports', href: '/dashboard/cda' },
-    { label: 'Settings', href: '/dashboard/settings' },
-  ],
+type Role = 'CUSTOMER' | 'CDA' | 'DEPT_ADMIN' | 'SUPER_ADMIN';
+
+interface NavItem { href: string; label: string; roles: Role[]; }
+
+const NAV: NavItem[] = [
+  { href: '/dashboard/cda',        label: 'CDA Queue',       roles: ['CDA'] },
+  { href: '/dashboard/dept',       label: 'My Queue',        roles: ['DEPT_ADMIN'] },
+  { href: '/dashboard/superadmin', label: 'Escalations',     roles: ['SUPER_ADMIN'] },
+  { href: '/report',               label: 'All Reports',     roles: ['CDA', 'DEPT_ADMIN', 'SUPER_ADMIN'] },
+  { href: '/chat',                 label: 'New Complaint',   roles: ['CUSTOMER'] },
+];
+
+const ROLE_LABEL: Record<Role, string> = {
+  CUSTOMER: 'Customer', CDA: 'CDA', DEPT_ADMIN: 'Dept Admin', SUPER_ADMIN: 'Super Admin',
 };
 
-interface SidebarProps {
-  mobileOpen: boolean;
-  onCloseMobile: () => void;
-}
-
-export default function Sidebar({ mobileOpen, onCloseMobile }: SidebarProps) {
-  const [user, setUser] = useState<UserDto | null>(null);
+export default function Sidebar() {
   const pathname = usePathname();
+  const router   = useRouter();
+  const [role, setRole]   = useState<Role | null>(null);
+  const [email, setEmail] = useState('');
+  const [name, setName]   = useState('');
 
   useEffect(() => {
-    getUser().then(setUser);
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((u: { role?: Role; email?: string; name?: string } | null) => {
+        if (!u) return;
+        setRole(u.role ?? null);
+        setEmail(u.email ?? '');
+        setName(u.name ?? '');
+      })
+      .catch(() => {});
   }, []);
 
-  const navItems = user ? NAV_BY_ROLE[user.role] ?? [] : [];
+  async function logout() {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+    localStorage.removeItem('access_token');
+    router.push('/');
+  }
+
+  const nav = role ? NAV.filter(n => n.roles.includes(role)) : [];
 
   return (
-    <>
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={onCloseMobile}
-        />
-      )}
+    <aside style={{
+      position: 'fixed', top: 0, left: 0, bottom: 0,
+      width: '224px',
+      background: '#000000',
+      borderRight: '1px solid #1a1a1a',
+      display: 'flex', flexDirection: 'column',
+      padding: '24px 16px',
+      zIndex: 100,
+    }}>
 
-      <aside
-        className={`
-          fixed top-0 left-0 z-50 h-full w-64 bg-surface border-r border-white/[0.06]
-          flex flex-col transition-transform duration-300 ease-in-out
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:relative lg:translate-x-0 lg:z-auto
-        `}
-      >
-        {/* Logo */}
-        <div className="flex items-center gap-2 px-5 py-5 border-b border-white/[0.06]">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-accent2 flex items-center justify-center shrink-0">
-            <span className="text-[#0a0a0f] font-bold text-sm">R</span>
-          </div>
-          <span className="text-lg font-bold text-white tracking-tight">
-            Resolve<span className="text-accent">IQ</span>
+      {/* Wordmark */}
+      <div style={{ marginBottom: '32px', paddingLeft: '8px' }}>
+        <Link href="/" style={{ textDecoration: 'none' }}>
+          <span style={{
+            fontFamily: 'Space Grotesk, sans-serif',
+            fontSize: '15px', fontWeight: 600,
+            letterSpacing: '-0.01em', color: '#ffffff',
+          }}>
+            ZeroDesk
           </span>
-        </div>
+        </Link>
+      </div>
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + '/');
-            return (
-              <a
-                key={item.href}
-                href={item.href}
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
-                  ${active
-                    ? 'bg-accent/10 text-accent border border-accent/20'
-                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-                  }
-                `}
-              >
-                <div className={`w-2 h-2 rounded-full shrink-0 ${active ? 'bg-accent' : 'bg-slate-600'}`} />
-                <span>{item.label}</span>
-              </a>
-            );
-          })}
-        </nav>
-
-        {/* User card */}
-        {user && (
-          <div className="px-3 py-4 border-t border-white/[0.06]">
-            <div className="flex items-center gap-3 px-3 py-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent/30 to-accent2/30 flex items-center justify-center shrink-0">
-                <span className="text-xs font-semibold text-white">
-                  {(user.name ?? user.email).charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">
-                  {user.name ?? 'User'}
-                </p>
-                <p className="text-xs text-slate-500 truncate">{user.email}</p>
-              </div>
-            </div>
-            <button
-              onClick={logout}
-              className="mt-2 w-full px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all text-left"
+      {/* Nav */}
+      <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1px' }}>
+        {nav.map(item => {
+          const active = pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              style={{
+                display: 'flex', alignItems: 'center',
+                padding: '7px 10px',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                background: active ? '#111111' : 'transparent',
+                color: active ? '#ffffff' : '#737373',
+                fontSize: '13px',
+                fontWeight: active ? 500 : 400,
+                transition: 'all 0.1s ease',
+                border: `1px solid ${active ? '#262626' : 'transparent'}`,
+              }}
+              onMouseEnter={e => {
+                if (!active) {
+                  (e.currentTarget as HTMLAnchorElement).style.color = '#ffffff';
+                  (e.currentTarget as HTMLAnchorElement).style.background = '#0a0a0a';
+                }
+              }}
+              onMouseLeave={e => {
+                if (!active) {
+                  (e.currentTarget as HTMLAnchorElement).style.color = '#737373';
+                  (e.currentTarget as HTMLAnchorElement).style.background = 'transparent';
+                }
+              }}
             >
-              Sign out
-            </button>
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* User */}
+      <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: '16px' }}>
+        {role && (
+          <div style={{ paddingLeft: '10px', marginBottom: '12px' }}>
+            <div style={{
+              fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em',
+              textTransform: 'uppercase', color: '#404040', marginBottom: '4px',
+            }}>
+              {ROLE_LABEL[role]}
+            </div>
+            <div style={{ fontSize: '13px', color: '#a3a3a3', fontWeight: 500, marginBottom: '2px' }}>
+              {name || '—'}
+            </div>
+            <div style={{
+              fontSize: '12px', color: '#404040',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {email}
+            </div>
           </div>
         )}
-      </aside>
-    </>
+        <button
+          onClick={logout}
+          style={{
+            width: '100%', padding: '7px 10px',
+            background: 'transparent', border: '1px solid transparent',
+            borderRadius: '6px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: '8px',
+            fontSize: '13px', color: '#404040',
+            fontFamily: 'Inter, sans-serif',
+            transition: 'all 0.1s ease',
+            textAlign: 'left',
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLButtonElement).style.color = '#f87171';
+            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(248,113,113,0.06)';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(248,113,113,0.15)';
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLButtonElement).style.color = '#404040';
+            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'transparent';
+          }}
+        >
+          <span style={{ fontSize: '12px' }}>↩</span> Sign out
+        </button>
+      </div>
+    </aside>
   );
 }

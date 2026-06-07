@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 import type { Role } from '../../../types';
 
 const ROLE_ROUTES: Record<Role, string> = {
@@ -23,6 +24,8 @@ export default function LoginPage() {
     setLoading(true);
 
 =======
+=======
+>>>>>>> Stashed changes
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -45,6 +48,9 @@ export default function LoginPage() {
     if (!email || !password) { setError('Both fields required.'); return; }
     setLoading(true);
     setError(null);
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     try {
       const res = await fetch('/api/auth/login', {
@@ -53,6 +59,7 @@ export default function LoginPage() {
         credentials: 'include',
         body: JSON.stringify({ email, password }),
       });
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 
       if (!res.ok) {
@@ -66,6 +73,8 @@ export default function LoginPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
 =======
+=======
+>>>>>>> Stashed changes
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as { message?: string };
         throw new Error(d.message ?? 'Invalid credentials');
@@ -76,6 +85,9 @@ export default function LoginPage() {
       router.push(route);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Login failed');
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     } finally {
       setLoading(false);
@@ -83,6 +95,7 @@ export default function LoginPage() {
   }
 
   return (
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
     <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f] px-4">
       {/* Background glow effects */}
@@ -189,6 +202,8 @@ export default function LoginPage() {
   );
 }
 =======
+=======
+>>>>>>> Stashed changes
     <div
       style={{
         minHeight: '100vh',
@@ -447,5 +462,9 @@ export default function LoginPage() {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
+<<<<<<< Updated upstream
+}
+>>>>>>> Stashed changes
+=======
 }
 >>>>>>> Stashed changes

@@ -5,13 +5,26 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        accent: '#6ee7b7',
-        accent2: '#818cf8',
-        surface: '#12121a',
-        'surface-2': '#1a1a26',
+        bg:        '#000000',
+        surface:   '#111111',
+        'surface-2': '#171717',
+        border:    '#262626',
+        'border-2': '#303030',
+      },
+      fontFamily: {
+        heading: ['Space Grotesk', 'sans-serif'],
+        body:    ['Inter', 'sans-serif'],
+      },
+      borderRadius: {
+        sm: '4px',
+        DEFAULT: '6px',
+        md: '8px',
+        lg: '10px',
+        xl: '12px',
       },
     },
   },
   plugins: [],
 };
+
 export default config;
