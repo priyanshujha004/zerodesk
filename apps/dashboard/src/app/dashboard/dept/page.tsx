@@ -32,7 +32,7 @@ function Stat({ label, value, loading }: { label: string; value: number | string
   );
 }
 
-export function DeptDashboard() {
+export default function DeptDashboard() {
   const { toasts, push, dismiss } = useToast();
   const [reports, setReports]       = useState<ReportRow[]>([]);
   const [stats, setStats]           = useState({ queue: 0, inProgress: 0, completedToday: 0, slaBreached: 0 });
@@ -119,4 +119,3 @@ export function DeptDashboard() {
     </>
   );
 }
-export default DeptDashboard;

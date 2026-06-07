@@ -34,7 +34,7 @@ function StatSA({ label, value, loading }: { label: string; value: number | stri
   );
 }
 
-export function SuperAdminDashboard() {
+export default function SuperAdminDashboard() {
   const router = useRouter();
   const { toasts, push, dismiss } = useToast();
   const [reports, setReports]       = useState<ReportRow[]>([]);
@@ -108,5 +108,3 @@ export function SuperAdminDashboard() {
     </>
   );
 }
-
-export default SuperAdminDashboard;
