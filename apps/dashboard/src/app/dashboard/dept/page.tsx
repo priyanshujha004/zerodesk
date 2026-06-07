@@ -1,3 +1,6 @@
+/* ───────────────────────────────────────────────────────────
+   DEPT DASHBOARD
+─────────────────────────────────────────────────────────── */
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -6,148 +9,114 @@ import { ReportItem, ReportRow } from '@/components/dashboard/ReportItem';
 import { ActionPanel } from '@/components/dashboard/ActionPanel';
 import { Toast, useToast } from '@/components/dashboard/Toast';
 
-function getToken(): string {
-  return typeof window !== 'undefined'
-    ? (localStorage.getItem('access_token') ?? '')
-    : '';
+function getToken() {
+  return typeof window !== 'undefined' ? (localStorage.getItem('access_token') ?? '') : '';
 }
 
 interface ApiReport {
-  id: string;
-  issueSummary: string;
-  customer?: { name?: string };
-  routeToDeptName: string;
-  priority: 'HIGH' | 'MEDIUM' | 'LOW';
-  slaDeadline?: string | null;
-  slaBreached?: boolean;
-  status: string;
-  createdAt: string;
+  id: string; issueSummary: string; customer?: { name?: string };
+  routeToDeptName: string; priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  slaDeadline?: string | null; slaBreached?: boolean; status: string; createdAt: string;
+}
+interface ApiResponse { data: ApiReport[]; total: number; }
+
+function Stat({ label, value, loading }: { label: string; value: number | string; loading: boolean }) {
+  return (
+    <div style={{ background: '#111111', border: '1px solid #1a1a1a', borderRadius: '8px', padding: '18px 20px' }}>
+      <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#404040', marginBottom: '8px' }}>{label}</p>
+      {loading
+        ? <div style={{ width: '48px', height: '28px', background: '#1a1a1a', borderRadius: '4px', animation: 'pulse 1.5s ease infinite' }} />
+        : <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '28px', fontWeight: 600, letterSpacing: '-0.02em', color: '#ffffff' }}>{value}</p>
+      }
+    </div>
+  );
 }
 
-interface ApiResponse {
-  data: ApiReport[];
-  total: number;
-}
-
-export default function DeptDashboard() {
+export function DeptDashboard() {
   const { toasts, push, dismiss } = useToast();
+  const [reports, setReports]       = useState<ReportRow[]>([]);
+  const [stats, setStats]           = useState({ queue: 0, inProgress: 0, completedToday: 0, slaBreached: 0 });
+  const [loading, setLoading]       = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [actionId, setActionId]     = useState<string | null>(null);
 
-  const [reports, setReports] = useState<ReportRow[]>([]);
-  const [stats, setStats] = useState({ queue: 0, inProgress: 0, completedToday: 0, slaBreached: 0 });
-  const [loading, setLoading] = useState(true);
-  const [statsRefreshing, setStatsRefreshing] = useState(false);
-  const [actionReportId, setActionReportId] = useState<string | null>(null);
-
-  const fetchReports = useCallback(async (isStatRefresh = false) => {
-    if (isStatRefresh) setStatsRefreshing(true);
-    else setLoading(true);
+  const fetch_ = useCallback(async (stat = false) => {
+    stat ? setRefreshing(true) : setLoading(true);
     try {
-      const token = getToken();
-      const [queueRes, inProgRes, completedRes] = await Promise.all([
-        fetch('http://localhost:3000/api/reports?status=APPROVED_TO_DEPT&limit=50', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('http://localhost:3000/api/reports?status=IN_PROGRESS&limit=1', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('http://localhost:3000/api/reports?status=COMPLETED&limit=50', { headers: { Authorization: `Bearer ${token}` } }),
+      const h = { Authorization: `Bearer ${getToken()}` };
+      const [qR, iR, cR] = await Promise.all([
+        fetch('/api/reports?status=APPROVED_TO_DEPT&limit=50', { headers: h }),
+        fetch('/api/reports?status=IN_PROGRESS&limit=1',      { headers: h }),
+        fetch('/api/reports?status=COMPLETED&limit=50',       { headers: h }),
       ]);
-      const queue: ApiResponse = await queueRes.json();
-      const inProg: ApiResponse = await inProgRes.json();
-      const completed: ApiResponse = await completedRes.json();
-
+      const [q, i, c]: ApiResponse[] = await Promise.all([qR.json(), iR.json(), cR.json()]);
       const today = new Date().toDateString();
-      const completedToday = completed.data.filter((r) => new Date(r.createdAt).toDateString() === today).length;
-      const breached = queue.data.filter((r) => r.slaBreached).length;
+      setStats({
+        queue: q.total, inProgress: i.total,
+        completedToday: c.data.filter(r => new Date(r.createdAt).toDateString() === today).length,
+        slaBreached: q.data.filter(r => r.slaBreached).length,
+      });
+      setReports(q.data.map(r => ({ id: r.id, issueSummary: r.issueSummary, customerName: r.customer?.name, routeToDeptName: r.routeToDeptName, priority: r.priority, slaDeadline: r.slaDeadline, status: r.status, createdAt: r.createdAt })));
+    } catch { push('Failed to load', 'error'); }
+    finally { setLoading(false); setRefreshing(false); }
+  }, [push]);
 
-      setStats({ queue: queue.total, inProgress: inProg.total, completedToday, slaBreached: breached });
-      setReports(queue.data.map((r) => ({
-        id: r.id, issueSummary: r.issueSummary, customerName: r.customer?.name,
-        routeToDeptName: r.routeToDeptName, priority: r.priority,
-        slaDeadline: r.slaDeadline, status: r.status, createdAt: r.createdAt,
-      })));
-    } catch {
-      push('Failed to load reports', 'error');
-    } finally {
-      setLoading(false);
-      setStatsRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchReports(); }, [fetchReports]);
-
-  const statCards = [
-    { label: 'My Queue', value: stats.queue, color: '#6ee7b7' },
-    { label: 'In Progress', value: stats.inProgress, color: '#60a5fa' },
-    { label: 'Completed Today', value: stats.completedToday, color: '#a78bfa' },
-    { label: 'SLA Breached', value: stats.slaBreached, color: '#f87171' },
-  ];
+  useEffect(() => { fetch_(); }, [fetch_]);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-slate-100 p-6 font-sans">
-      <div className="mb-8">
-        <p className="text-xs text-[#6ee7b7] font-mono uppercase tracking-widest mb-1">ResolveIQ</p>
-        <h1 className="text-2xl font-bold text-white">Department Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">Dept Admin · Action Queue</p>
+    <>
+      <div style={{ marginBottom: '28px' }}>
+        <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#404040', marginBottom: '6px' }}>ZeroDesk / Dept</p>
+        <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '24px', fontWeight: 600, letterSpacing: '-0.02em', color: '#ffffff', marginBottom: '3px' }}>Department Queue</h1>
+        <p style={{ fontSize: '13px', color: '#737373' }}>Take action on approved reports</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-2">
-        {statCards.map((s) => (
-          <div key={s.label} className="bg-[#12121a] border border-slate-800/60 rounded-xl p-5">
-            <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">{s.label}</p>
-            <p className="text-3xl font-bold" style={{ color: s.color }}>
-              {statsRefreshing
-                ? <span className="inline-block w-8 h-7 rounded bg-slate-800 animate-pulse align-middle" />
-                : s.value}
-            </p>
-          </div>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginBottom: '28px' }}>
+        <Stat label="Queue"           value={stats.queue}          loading={refreshing} />
+        <Stat label="In progress"     value={stats.inProgress}     loading={refreshing} />
+        <Stat label="Completed today" value={stats.completedToday} loading={refreshing} />
+        <Stat label="SLA breached"    value={stats.slaBreached}    loading={refreshing} />
       </div>
 
-      <div className="mb-4 mt-6 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Approved Queue</h2>
-        <button
-          onClick={() => fetchReports(true)}
-          disabled={statsRefreshing}
-          className="text-xs text-slate-500 hover:text-[#6ee7b7] transition-colors flex items-center gap-1 disabled:opacity-40"
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#404040' }}>Approved queue</p>
+        <button onClick={() => fetch_(true)} disabled={refreshing}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#404040', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '5px', transition: 'color 0.1s' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#ffffff')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#404040')}
         >
-          <span className={statsRefreshing ? 'animate-spin inline-block' : ''}>↻</span>
-          {statsRefreshing ? 'Refreshing…' : 'Refresh'}
+          <span style={{ display: 'inline-block', animation: refreshing ? 'spin 0.6s linear infinite' : 'none' }}>↻</span>
+          {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
       <ReportQueue
         headers={['Report', 'Customer', 'Priority', 'SLA', 'Action']}
-        reports={reports}
-        loading={loading}
-        emptyMsg="Queue is clear ✓"
-        renderRow={(r) => (
-          <ReportItem
-            key={r.id}
-            report={r}
-            columns={['summary', 'customer', 'priority', 'sla']}
+        reports={reports} loading={loading} emptyMsg="Queue is clear"
+        renderRow={r => (
+          <ReportItem key={r.id} report={r} columns={['summary', 'customer', 'priority', 'sla']}
             actions={
-              <button
-                onClick={() => setActionReportId(r.id)}
-                className="px-3 py-1.5 bg-[#6ee7b7]/10 text-[#6ee7b7] border border-[#6ee7b7]/30 text-xs font-semibold rounded-lg hover:bg-[#6ee7b7]/20 transition-colors"
+              <button onClick={() => setActionId(r.id)}
+                style={{ padding: '5px 12px', background: '#111111', border: '1px solid #262626', borderRadius: '5px', cursor: 'pointer', fontSize: '12px', color: '#ffffff', fontFamily: 'Inter, sans-serif', fontWeight: 500, transition: 'background 0.1s' }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#1a1a1a')}
+                onMouseLeave={e => (e.currentTarget.style.background = '#111111')}
               >
-                Take Action
+                Take action
               </button>
             }
           />
         )}
       />
 
-      {actionReportId && (
-        <ActionPanel
-          reportId={actionReportId}
-          token={getToken()}
-          onSuccess={() => {
-            setActionReportId(null);
-            push('Report resolved successfully ✓');
-            fetchReports();
-          }}
-          onClose={() => setActionReportId(null)}
+      {actionId && (
+        <ActionPanel reportId={actionId} token={getToken()}
+          onSuccess={() => { setActionId(null); push('Resolved ✓'); fetch_(); }}
+          onClose={() => setActionId(null)}
         />
       )}
-
       <Toast toasts={toasts} onDismiss={dismiss} />
-    </div>
+      <style>{`@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}} @keyframes spin{to{transform:rotate(360deg);}}`}</style>
+    </>
   );
 }
+export default DeptDashboard;

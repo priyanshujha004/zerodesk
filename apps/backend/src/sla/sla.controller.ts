@@ -14,4 +14,4 @@ export class SlaController {
   trigger() {
     return this.slaService.triggerManualCheck();
   }
-}
+} 

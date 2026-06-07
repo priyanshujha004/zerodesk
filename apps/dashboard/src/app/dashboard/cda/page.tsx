@@ -6,88 +6,67 @@ import { ReportQueue } from '@/components/dashboard/ReportQueue';
 import { ReportItem, ReportRow } from '@/components/dashboard/ReportItem';
 import { Toast, useToast } from '@/components/dashboard/Toast';
 
-function getToken(): string {
-  return typeof window !== 'undefined'
-    ? (localStorage.getItem('access_token') ?? '')
-    : '';
+function getToken() {
+  return typeof window !== 'undefined' ? (localStorage.getItem('access_token') ?? '') : '';
 }
 
 interface ApiReport {
-  id: string;
-  issueSummary: string;
-  customer?: { name?: string };
-  routeToDeptName: string;
+  id: string; issueSummary: string;
+  customer?: { name?: string }; routeToDeptName: string;
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
-  slaDeadline?: string | null;
-  status: string;
-  createdAt: string;
+  slaDeadline?: string | null; status: string; createdAt: string;
+}
+interface ApiResponse { data: ApiReport[]; total: number; }
+
+/* ── Stat card ── */
+function Stat({ label, value, loading }: { label: string; value: number; loading: boolean }) {
+  return (
+    <div style={{
+      background: '#111111', border: '1px solid #1a1a1a', borderRadius: '8px', padding: '18px 20px',
+    }}>
+      <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#404040', marginBottom: '8px' }}>
+        {label}
+      </p>
+      {loading
+        ? <div style={{ width: '48px', height: '28px', background: '#1a1a1a', borderRadius: '4px', animation: 'pulse 1.5s ease infinite' }} />
+        : <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '28px', fontWeight: 600, letterSpacing: '-0.02em', color: '#ffffff' }}>
+            {value}
+          </p>
+      }
+    </div>
+  );
 }
 
-interface ApiResponse {
-  data: ApiReport[];
-  total: number;
-}
-
-interface RejectModalProps {
-  reportId: string;
-  onConfirm: (note: string) => Promise<void>;
-  onClose: () => void;
-}
-
-function RejectModal({ reportId, onConfirm, onClose }: RejectModalProps) {
+/* ── Reject modal ── */
+function RejectModal({ reportId, onConfirm, onClose }: { reportId: string; onConfirm: (n: string) => Promise<void>; onClose: () => void; }) {
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
-    if (!note.trim()) { setError('Rejection reason is required.'); return; }
-    setLoading(true);
-    setError(null);
-    try {
-      await onConfirm(note);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to reject');
-      setLoading(false);
-    }
+    if (!note.trim()) { setErr('Reason required.'); return; }
+    setLoading(true); setErr(null);
+    try { await onConfirm(note); } catch (e) { setErr(e instanceof Error ? e.message : 'Failed'); setLoading(false); }
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-[#12121a] border border-slate-700/60 rounded-2xl p-6 w-full max-w-md shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-red-400 font-semibold text-lg mb-1">Reject Report</h2>
-        <p className="text-xs text-slate-500 mb-4 font-mono">#{reportId.slice(-8).toUpperCase()}</p>
-        <label className="block text-xs text-slate-500 mb-1 uppercase tracking-wider">
-          Rejection Reason <span className="text-red-500">*</span>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '20px' }} onClick={onClose}>
+      <div style={{ background: '#111111', border: '1px solid #262626', borderRadius: '10px', padding: '24px', width: '100%', maxWidth: '400px', boxShadow: '0 24px 48px rgba(0,0,0,0.6)' }} onClick={e => e.stopPropagation()}>
+        <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '16px', fontWeight: 600, color: '#f87171', marginBottom: '4px' }}>Reject report</p>
+        <p style={{ fontSize: '12px', color: '#404040', marginBottom: '20px', fontFamily: 'Space Grotesk, sans-serif' }}>#{reportId.slice(-8).toUpperCase()}</p>
+        <label style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#404040', display: 'block', marginBottom: '6px' }}>
+          Rejection reason <span style={{ color: '#f87171' }}>*</span>
         </label>
         <textarea
-          className="w-full bg-[#0a0a0f] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-red-500/50 mb-4 resize-none"
-          rows={3}
-          placeholder="Explain why this report is being rejected…"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          autoFocus
+          value={note} onChange={e => setNote(e.target.value)} rows={3} autoFocus
+          placeholder="Explain the rejection…"
+          style={{ width: '100%', background: '#0a0a0a', border: '1px solid #262626', borderRadius: '6px', padding: '10px 12px', fontSize: '13px', color: '#ffffff', outline: 'none', resize: 'none', fontFamily: 'Inter, sans-serif', marginBottom: '16px' }}
         />
-        {error && (
-          <p className="text-red-400 text-xs mb-3 bg-red-900/20 border border-red-800/40 rounded px-3 py-2">
-            {error}
-          </p>
-        )}
-        <div className="flex gap-3 justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors">
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={loading}
-            className="px-5 py-2 bg-red-500/20 text-red-400 border border-red-500/30 text-sm font-semibold rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Rejecting…' : 'Reject Report'}
+        {err && <p style={{ fontSize: '12px', color: '#f87171', marginBottom: '12px', background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '5px', padding: '8px 12px' }}>{err}</p>}
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid #262626', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', color: '#737373', fontFamily: 'Inter, sans-serif' }}>Cancel</button>
+          <button onClick={submit} disabled={loading} style={{ padding: '8px 16px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', color: '#f87171', fontFamily: 'Inter, sans-serif', opacity: loading ? 0.5 : 1 }}>
+            {loading ? 'Rejecting…' : 'Reject'}
           </button>
         </div>
       </div>
@@ -98,138 +77,107 @@ function RejectModal({ reportId, onConfirm, onClose }: RejectModalProps) {
 export default function CdaDashboard() {
   const router = useRouter();
   const { toasts, push, dismiss } = useToast();
-
-  const [reports, setReports] = useState<ReportRow[]>([]);
-  const [stats, setStats] = useState({ pending: 0, approvedToday: 0, rejected: 0, escalated: 0 });
-  const [loading, setLoading] = useState(true);
-  const [statsRefreshing, setStatsRefreshing] = useState(false);
+  const [reports, setReports]     = useState<ReportRow[]>([]);
+  const [stats, setStats]         = useState({ pending: 0, approved: 0, rejected: 0, escalated: 0 });
+  const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [rejectModal, setRejectModal] = useState<string | null>(null);
+  const [rejectModal, setRejectModal]     = useState<string | null>(null);
 
-  const fetchReports = useCallback(async (isStatRefresh = false) => {
-    if (isStatRefresh) setStatsRefreshing(true);
-    else setLoading(true);
+  const fetch_ = useCallback(async (stat = false) => {
+    stat ? setRefreshing(true) : setLoading(true);
     try {
-      const token = getToken();
-      const [pendingRes, approvedRes, rejectedRes, escalatedRes] = await Promise.all([
-        fetch('http://localhost:3000/api/reports?status=PENDING_CDA&limit=50', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('http://localhost:3000/api/reports?status=APPROVED_TO_DEPT&limit=1', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('http://localhost:3000/api/reports?status=REJECTED&limit=1', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('http://localhost:3000/api/reports?status=ESCALATED&limit=1', { headers: { Authorization: `Bearer ${token}` } }),
+      const h = { Authorization: `Bearer ${getToken()}` };
+      const [pR, aR, rR, eR] = await Promise.all([
+        fetch('/api/reports?status=PENDING_CDA&limit=50',      { headers: h }),
+        fetch('/api/reports?status=APPROVED_TO_DEPT&limit=1',  { headers: h }),
+        fetch('/api/reports?status=REJECTED&limit=1',          { headers: h }),
+        fetch('/api/reports?status=ESCALATED&limit=1',         { headers: h }),
       ]);
-      const pending: ApiResponse = await pendingRes.json();
-      const approved: ApiResponse = await approvedRes.json();
-      const rejected: ApiResponse = await rejectedRes.json();
-      const escalated: ApiResponse = await escalatedRes.json();
-      setStats({ pending: pending.total, approvedToday: approved.total, rejected: rejected.total, escalated: escalated.total });
-      setReports(pending.data.map((r) => ({
-        id: r.id, issueSummary: r.issueSummary, customerName: r.customer?.name,
-        routeToDeptName: r.routeToDeptName, priority: r.priority,
-        slaDeadline: r.slaDeadline, status: r.status, createdAt: r.createdAt,
-      })));
-    } catch {
-      push('Failed to load reports', 'error');
-    } finally {
-      setLoading(false);
-      setStatsRefreshing(false);
-    }
-  }, []);
+      const [p, a, r, e]: ApiResponse[] = await Promise.all([pR.json(), aR.json(), rR.json(), eR.json()]);
+      setStats({ pending: p.total, approved: a.total, rejected: r.total, escalated: e.total });
+      setReports(p.data.map(r => ({ id: r.id, issueSummary: r.issueSummary, customerName: r.customer?.name, routeToDeptName: r.routeToDeptName, priority: r.priority, slaDeadline: r.slaDeadline, status: r.status, createdAt: r.createdAt })));
+    } catch { push('Failed to load', 'error'); }
+    finally { setLoading(false); setRefreshing(false); }
+  }, [push]);
 
-  useEffect(() => { fetchReports(); }, [fetchReports]);
+  useEffect(() => { fetch_(); }, [fetch_]);
 
-  async function handleApprove(reportId: string) {
-    setActionLoading(reportId + ':approve');
+  async function approve(id: string) {
+    setActionLoading(id + ':a');
     try {
-      const res = await fetch(`http://localhost:3000/api/workflow/approve/${reportId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) throw new Error((await res.json()).message ?? 'Failed');
-      push('Report approved and sent to department ✓');
-      await fetchReports();
-    } catch (e) {
-      push(e instanceof Error ? e.message : 'Approval failed', 'error');
-    } finally {
-      setActionLoading(null);
-    }
+      const res = await fetch(`/api/workflow/approve/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` }, body: '{}' });
+      if (!res.ok) throw new Error(((await res.json()) as { message?: string }).message ?? 'Failed');
+      push('Approved ✓'); fetch_();
+    } catch (e) { push(e instanceof Error ? e.message : 'Failed', 'error'); }
+    finally { setActionLoading(null); }
   }
 
-  async function handleReject(reportId: string, note: string) {
-    const res = await fetch(`http://localhost:3000/api/workflow/reject/${reportId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ note }),
-    });
-    if (!res.ok) throw new Error((await res.json()).message ?? 'Failed');
-    push('Report rejected ✓');
-    setRejectModal(null);
-    await fetchReports();
+  async function reject(id: string, note: string) {
+    const res = await fetch(`/api/workflow/reject/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify({ note }) });
+    if (!res.ok) throw new Error(((await res.json()) as { message?: string }).message ?? 'Failed');
+    push('Rejected ✓'); setRejectModal(null); fetch_();
   }
-
-  const statCards = [
-    { label: 'Pending Review', value: stats.pending, color: '#6ee7b7' },
-    { label: 'Approved Today', value: stats.approvedToday, color: '#60a5fa' },
-    { label: 'Rejected', value: stats.rejected, color: '#f87171' },
-    { label: 'Escalated', value: stats.escalated, color: '#fb923c' },
-  ];
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-slate-100 p-6 font-sans">
-      <div className="mb-8">
-        <p className="text-xs text-[#6ee7b7] font-mono uppercase tracking-widest mb-1">ResolveIQ</p>
-        <h1 className="text-2xl font-bold text-white">CDA Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">Customer Data Analyst · Report Review Queue</p>
+    <>
+      {/* Header */}
+      <div style={{ marginBottom: '28px' }}>
+        <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#404040', marginBottom: '6px' }}>
+          ZeroDesk / CDA
+        </p>
+        <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '24px', fontWeight: 600, letterSpacing: '-0.02em', color: '#ffffff', marginBottom: '3px' }}>
+          CDA Queue
+        </h1>
+        <p style={{ fontSize: '13px', color: '#737373' }}>Review and route incoming reports</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-2">
-        {statCards.map((s) => (
-          <div key={s.label} className="bg-[#12121a] border border-slate-800/60 rounded-xl p-5">
-            <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">{s.label}</p>
-            <p className="text-3xl font-bold" style={{ color: s.color }}>
-              {statsRefreshing
-                ? <span className="inline-block w-8 h-7 rounded bg-slate-800 animate-pulse align-middle" />
-                : s.value}
-            </p>
-          </div>
-        ))}
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginBottom: '28px' }}>
+        <Stat label="Pending review" value={stats.pending}   loading={refreshing} />
+        <Stat label="Approved"       value={stats.approved}  loading={refreshing} />
+        <Stat label="Rejected"       value={stats.rejected}  loading={refreshing} />
+        <Stat label="Escalated"      value={stats.escalated} loading={refreshing} />
       </div>
 
-      <div className="mb-4 mt-6 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Pending Review</h2>
-        <button
-          onClick={() => fetchReports(true)}
-          disabled={statsRefreshing}
-          className="text-xs text-slate-500 hover:text-[#6ee7b7] transition-colors flex items-center gap-1 disabled:opacity-40"
+      {/* Queue label + refresh */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#404040' }}>
+          Pending review
+        </p>
+        <button onClick={() => fetch_(true)} disabled={refreshing}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#404040', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 8px', borderRadius: '4px', transition: 'color 0.1s' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#ffffff')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#404040')}
         >
-          <span className={statsRefreshing ? 'animate-spin inline-block' : ''}>↻</span>
-          {statsRefreshing ? 'Refreshing…' : 'Refresh'}
+          <span style={{ display: 'inline-block', animation: refreshing ? 'spin 0.6s linear infinite' : 'none' }}>↻</span>
+          {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
       <ReportQueue
         headers={['Report', 'Customer', 'Department', 'Priority', 'SLA', 'Actions']}
-        reports={reports}
-        loading={loading}
-        emptyMsg="No pending reports"
-        renderRow={(r) => (
+        reports={reports} loading={loading} emptyMsg="No pending reports"
+        renderRow={r => (
           <ReportItem
-            key={r.id}
-            report={r}
+            key={r.id} report={r}
             columns={['summary', 'customer', 'dept', 'priority', 'sla']}
             onClick={() => router.push(`/report/${r.id}`)}
             actions={
-              <div className="flex gap-2">
+              <div style={{ display: 'flex', gap: '6px' }}>
                 <button
-                  onClick={() => handleApprove(r.id)}
-                  disabled={actionLoading === r.id + ':approve'}
-                  className="px-3 py-1.5 bg-[#6ee7b7]/10 text-[#6ee7b7] border border-[#6ee7b7]/30 text-xs font-semibold rounded-lg hover:bg-[#6ee7b7]/20 transition-colors disabled:opacity-40"
+                  onClick={() => approve(r.id)} disabled={actionLoading === r.id + ':a'}
+                  style={{ padding: '5px 12px', background: '#111111', border: '1px solid #262626', borderRadius: '5px', cursor: 'pointer', fontSize: '12px', color: '#ffffff', fontFamily: 'Inter, sans-serif', fontWeight: 500, transition: 'all 0.1s', opacity: actionLoading === r.id + ':a' ? 0.4 : 1 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#1a1a1a'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#111111'; }}
                 >
-                  {actionLoading === r.id + ':approve' ? '…' : 'Approve'}
+                  {actionLoading === r.id + ':a' ? '…' : 'Approve'}
                 </button>
                 <button
                   onClick={() => setRejectModal(r.id)}
-                  className="px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/30 text-xs font-semibold rounded-lg hover:bg-red-500/20 transition-colors"
+                  style={{ padding: '5px 12px', background: 'transparent', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '5px', cursor: 'pointer', fontSize: '12px', color: '#f87171', fontFamily: 'Inter, sans-serif', transition: 'all 0.1s' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(248,113,113,0.06)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
                 >
                   Reject
                 </button>
@@ -239,15 +187,9 @@ export default function CdaDashboard() {
         )}
       />
 
-      {rejectModal && (
-        <RejectModal
-          reportId={rejectModal}
-          onConfirm={(note) => handleReject(rejectModal, note)}
-          onClose={() => setRejectModal(null)}
-        />
-      )}
-
+      {rejectModal && <RejectModal reportId={rejectModal} onConfirm={n => reject(rejectModal, n)} onClose={() => setRejectModal(null)} />}
       <Toast toasts={toasts} onDismiss={dismiss} />
-    </div>
+      <style>{`@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}} @keyframes spin{to{transform:rotate(360deg);}}`}</style>
+    </>
   );
 }
