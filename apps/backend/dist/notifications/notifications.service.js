@@ -17,7 +17,7 @@ const prisma_service_1 = require("../prisma/prisma.service");
 const client_1 = require("@prisma/client");
 const resend_1 = require("resend");
 const resend = new resend_1.Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = 'noreply@resolveiq.app';
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev';
 let NotificationsService = NotificationsService_1 = class NotificationsService {
     constructor(prisma) {
         this.prisma = prisma;
@@ -306,11 +306,11 @@ let NotificationsService = NotificationsService_1 = class NotificationsService {
 </head>
 <body>
   <div class="card">
-    <div class="logo">ResolveIQ</div>
+    <div class="logo">ZeroDesk</div>
     <h2>${title}</h2>
     ${body}
     <div class="footer">
-      <p>© ResolveIQ. AI-powered returns resolution.</p>
+      <p>© ZeroDesk AI Powered Customer SaaS.</p>
     </div>
   </div>
 </body>

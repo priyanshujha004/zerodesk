@@ -9,12 +9,7 @@ interface OtpBody { email: string }
 interface VerifyBody { email: string; code: string }
 interface LookupEmailBody { tenantId: string; email: string }
 interface LookupOrderBody { tenantId: string; orderNumber: string }
-interface MessageBody {
-  conversationId: string;
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-  orderContext?: MappedOrder;
-  customerEmail?: string;
-}
+
 interface GeminiMessageBody {
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
   orderContext?: MappedOrder;
@@ -66,17 +61,4 @@ export class ChatController {
     if (!order) return { error: 'Order not found' };
     return order;
   }
-
-  @Post('message')
-  async message(@Body() body: MessageBody, @Res() res: Response) {
-    await this.chatService.streamMessage(
-      body.conversationId,
-      body.messages,
-      res,
-      body.orderContext,
-      body.customerEmail,
-    );
-  }
-
-
 }

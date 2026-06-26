@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation';
 
 type Priority = 'HIGH' | 'MEDIUM' | 'LOW';
-type ReportStatus = string;
 
 export interface ReportRow {
   id: string;
@@ -12,7 +11,7 @@ export interface ReportRow {
   routeToDeptName: string;
   priority: Priority;
   slaDeadline?: string | null;
-  status: ReportStatus;
+  status: string;
   escalationCount?: number;
   escalationReason?: string;
   createdAt: string;
@@ -25,107 +24,108 @@ interface Props {
   onClick?: () => void;
 }
 
-const PRIORITY_STYLES: Record<Priority, string> = {
-  HIGH: 'bg-red-500/20 text-red-400 border border-red-500/30',
-  MEDIUM: 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
-  LOW: 'bg-slate-500/20 text-slate-400 border border-slate-500/30',
+const PRI: Record<Priority, { bg: string; color: string }> = {
+  HIGH:   { bg: 'rgba(248,113,113,0.08)', color: '#f87171' },
+  MEDIUM: { bg: 'rgba(251,191,36,0.08)',  color: '#fbbf24' },
+  LOW:    { bg: 'rgba(115,115,115,0.08)', color: '#737373' },
 };
 
-function SlaCountdown({ deadline }: { deadline?: string | null }) {
-  if (!deadline) return <span className="text-slate-600">—</span>;
-
+function SlaCell({ deadline }: { deadline?: string | null }) {
+  if (!deadline) return <span style={{ color: '#333333', fontSize: '12px' }}>—</span>;
   const diff = new Date(deadline).getTime() - Date.now();
   const breached = diff < 0;
   const absMs = Math.abs(diff);
   const h = Math.floor(absMs / 3600000);
   const m = Math.floor((absMs % 3600000) / 60000);
-
-  const label = breached ? `${h}h ${m}m ago` : `${h}h ${m}m`;
-
   return (
-    <span
-      className={`font-mono text-xs px-2 py-1 rounded ${
-        breached
-          ? 'bg-red-900/40 text-red-400 border border-red-700/50'
-          : diff < 3600000
-            ? 'bg-amber-900/40 text-amber-400 border border-amber-700/50'
-            : 'bg-[#1a1a28] text-slate-400 border border-slate-700/30'
-      }`}
-    >
-      {breached ? '⚠ ' : ''}{label}
+    <span style={{
+      fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px',
+      padding: '3px 8px', borderRadius: '4px', border: '1px solid',
+      background: breached ? 'rgba(248,113,113,0.08)' : diff < 3600000 ? 'rgba(251,191,36,0.08)' : '#0a0a0a',
+      color: breached ? '#f87171' : diff < 3600000 ? '#fbbf24' : '#404040',
+      borderColor: breached ? 'rgba(248,113,113,0.2)' : diff < 3600000 ? 'rgba(251,191,36,0.2)' : '#1a1a1a',
+    }}>
+      {breached ? `⚠ ${h}h ${m}m ago` : `${h}h ${m}m`}
     </span>
   );
 }
 
+const TD: React.CSSProperties = { padding: '12px 16px', verticalAlign: 'middle' };
+
 export function ReportItem({ report, columns, actions, onClick }: Props) {
   const router = useRouter();
 
-  const handleClick = () => {
-    if (onClick) { onClick(); return; }
-    router.push(`/report/${report.id}`);
-  };
-
   const colMap: Record<string, React.ReactNode> = {
     summary: (
-      <td key="summary" className="px-4 py-3 text-sm text-slate-200 max-w-[240px]">
-        <span className="font-mono text-xs text-[#6ee7b7] block mb-0.5">#{report.id.slice(-6)}</span>
-        <span className="line-clamp-2">{report.issueSummary}</span>
+      <td key="summary" style={{ ...TD, maxWidth: '260px' }}>
+        <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '11px', color: '#404040', display: 'block', marginBottom: '3px' }}>
+          #{report.id.slice(-6).toUpperCase()}
+        </span>
+        <span style={{ fontSize: '13px', color: '#a3a3a3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+          {report.issueSummary}
+        </span>
       </td>
     ),
     customer: (
-      <td key="customer" className="px-4 py-3 text-sm text-slate-300">
-        {report.customerName ?? '—'}
+      <td key="customer" style={TD}>
+        <span style={{ fontSize: '13px', color: '#737373' }}>{report.customerName ?? '—'}</span>
       </td>
     ),
     dept: (
-      <td key="dept" className="px-4 py-3 text-sm text-slate-400">
-        {report.routeToDeptName}
+      <td key="dept" style={TD}>
+        <span style={{ fontSize: '12px', color: '#404040' }}>{report.routeToDeptName}</span>
       </td>
     ),
     priority: (
-      <td key="priority" className="px-4 py-3">
-        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${PRIORITY_STYLES[report.priority]}`}>
+      <td key="priority" style={TD}>
+        <span style={{
+          fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '4px',
+          fontFamily: 'Space Grotesk, sans-serif',
+          background: PRI[report.priority].bg, color: PRI[report.priority].color,
+        }}>
           {report.priority}
         </span>
       </td>
     ),
     sla: (
-      <td key="sla" className="px-4 py-3">
-        <SlaCountdown deadline={report.slaDeadline} />
-      </td>
+      <td key="sla" style={TD}><SlaCell deadline={report.slaDeadline} /></td>
     ),
     status: (
-      <td key="status" className="px-4 py-3 text-xs text-slate-400 font-mono">
-        {report.status}
+      <td key="status" style={TD}>
+        <span style={{ fontSize: '11px', color: '#404040', fontFamily: 'Space Grotesk, sans-serif' }}>
+          {report.status.replace(/_/g, ' ')}
+        </span>
       </td>
     ),
     escalation: (
-      <td key="escalation" className="px-4 py-3 text-sm text-slate-400 max-w-[200px]">
-        <span className="text-xs bg-red-900/30 text-red-400 px-2 py-0.5 rounded mr-2">
+      <td key="escalation" style={{ ...TD, maxWidth: '200px' }}>
+        <span style={{ fontSize: '11px', background: 'rgba(248,113,113,0.08)', color: '#f87171', padding: '2px 7px', borderRadius: '4px', marginRight: '8px', fontFamily: 'Space Grotesk, sans-serif' }}>
           L{report.escalationCount ?? 1}
         </span>
-        <span className="line-clamp-1 text-xs">{report.escalationReason}</span>
+        <span style={{ fontSize: '12px', color: '#737373', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {report.escalationReason ?? '—'}
+        </span>
       </td>
     ),
     created: (
-      <td key="created" className="px-4 py-3 text-xs text-slate-500 font-mono whitespace-nowrap">
-        {new Date(report.createdAt).toLocaleDateString('en-IN', {
-          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-        })}
+      <td key="created" style={TD}>
+        <span style={{ fontSize: '11px', color: '#333333', fontFamily: 'Space Grotesk, sans-serif' }}>
+          {new Date(report.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+        </span>
       </td>
     ),
   };
 
   return (
     <tr
-      className="border-b border-slate-800/60 hover:bg-[#1a1a28] transition-colors cursor-pointer group"
-      onClick={handleClick}
+      onClick={() => onClick ? onClick() : router.push(`/report/${report.id}`)}
+      style={{ borderBottom: '1px solid #0f0f0f', cursor: 'pointer', transition: 'background 0.1s' }}
+      onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = '#0a0a0a'}
+      onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = 'transparent'}
     >
-      {columns.map((c) => colMap[c])}
+      {columns.map(c => colMap[c])}
       {actions && (
-        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-          {actions}
-        </td>
+        <td style={TD} onClick={e => e.stopPropagation()}>{actions}</td>
       )}
     </tr>
   );

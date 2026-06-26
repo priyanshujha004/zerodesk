@@ -5,7 +5,8 @@ import ChatWindow, { OrderContext } from '@/components/chat/ChatWindow';
 
 type Step = 'email' | 'otp' | 'chat';
 
-const TENANT_ID = 'tenant_demo';
+// ── Fix: was 'tenant_demo' — must match seeded tenant ID ──────────────────
+const TENANT_ID = 'tenant_shopease';
 
 export default function ChatPage() {
   const [step, setStep] = useState<Step>('email');
@@ -26,12 +27,6 @@ export default function ChatPage() {
       body: JSON.stringify({ email }),
     });
     setSending(false);
-
-    // In mock mode, log tells you the code — show hint in UI
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[DEV] Check NestJS logs for OTP code');
-    }
-
     setStep('otp');
   }
 
@@ -53,7 +48,6 @@ export default function ChatPage() {
       return;
     }
 
-    // Fetch orders by email + start conversation in parallel
     const [ordersRes, startRes] = await Promise.all([
       fetch('/api/chat/orders-by-email', {
         method: 'POST',
@@ -86,44 +80,90 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'var(--bg)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        fontFamily: 'var(--font-body)',
+      }}
+    >
+      <div style={{ width: '100%', maxWidth: '400px' }}>
 
         {/* Header */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center gap-2 mb-2">
-            <div className="w-2 h-2 rounded-full bg-[#6ee7b7] animate-pulse" />
-            <span className="text-xs font-mono text-[#6ee7b7] tracking-widest uppercase">ResolveIQ</span>
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span
+              style={{
+                width: '8px', height: '8px', borderRadius: '50%',
+                background: 'var(--acid)',
+                display: 'inline-block',
+                animation: 'pulse-glow 2s infinite',
+              }}
+            />
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                color: 'var(--acid)',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+              }}
+            >
+              ZeroDesk
+            </span>
           </div>
-          <h1 className="text-white font-semibold text-lg">Returns & Refunds</h1>
-          <p className="text-white/40 text-sm mt-1">Resolved in under 2 minutes.</p>
+          <h1
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '20px',
+              fontWeight: 700,
+              color: 'var(--text-1)',
+              margin: '0 0 4px',
+            }}
+          >
+            Returns & Support
+          </h1>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-3)', margin: 0 }}>
+            AI-assisted resolution
+          </p>
         </div>
 
         {/* Panel */}
         <div
-          className="rounded-2xl border border-white/10 bg-[#12121a] overflow-hidden"
-          style={{ minHeight: step === 'chat' ? '520px' : 'auto' }}
+          className="card"
+          style={{
+            borderRadius: '20px',
+            overflow: 'hidden',
+            minHeight: step === 'chat' ? '520px' : 'auto',
+          }}
         >
 
           {/* Step 1 — Email */}
           {step === 'email' && (
-            <div className="p-6">
-              <p className="text-white/60 text-sm mb-4">Enter the email address you used for your order.</p>
-              <form onSubmit={handleSendOtp} className="flex flex-col gap-3">
+            <div style={{ padding: '24px' }}>
+              <p style={{ color: 'var(--text-2)', fontSize: '14px', marginBottom: '16px' }}>
+                Enter the email address you used for your order.
+              </p>
+              <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   placeholder="you@example.com"
-                  className="bg-[#0a0a0f] border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:outline-none focus:border-[#6ee7b7]/40"
+                  className="input"
                 />
                 <button
                   type="submit"
                   disabled={!email || sending}
-                  className="rounded-xl bg-[#6ee7b7] text-[#0a0a0f] text-sm font-semibold py-3 hover:bg-[#5dd4a4] disabled:opacity-40 transition-colors"
+                  className="btn btn-primary"
+                  style={{ justifyContent: 'center', padding: '13px', width: '100%', opacity: sending ? 0.6 : 1 }}
                 >
-                  {sending ? 'Sending…' : 'Send Verification Code'}
+                  {sending ? 'Sending…' : 'Send Verification Code →'}
                 </button>
               </form>
             </div>
@@ -131,32 +171,61 @@ export default function ChatPage() {
 
           {/* Step 2 — OTP */}
           {step === 'otp' && (
-            <div className="p-6">
-              <p className="text-white/60 text-sm mb-1">
+            <div style={{ padding: '24px' }}>
+              <p style={{ color: 'var(--text-2)', fontSize: '14px', marginBottom: '4px' }}>
                 We sent a 6-digit code to
               </p>
-              <p className="text-white text-sm font-medium mb-4">{email}</p>
-              <form onSubmit={handleVerifyOtp} className="flex flex-col gap-3">
+              <p
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '13px',
+                  color: 'var(--acid)',
+                  marginBottom: '20px',
+                }}
+              >
+                {email}
+              </p>
+              <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <input
                   type="text"
                   value={otpInput}
                   onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="123456"
                   maxLength={6}
-                  className="bg-[#0a0a0f] border border-white/10 rounded-xl px-4 py-3 text-white text-sm text-center tracking-[0.5em] placeholder-white/20 focus:outline-none focus:border-[#6ee7b7]/40"
+                  className="input"
+                  style={{ textAlign: 'center', letterSpacing: '0.5em', fontSize: '20px' }}
                 />
-                {otpError && <p className="text-red-400 text-xs">{otpError}</p>}
+                {otpError && (
+                  <p
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '12px',
+                      color: 'var(--red)',
+                      padding: '8px 12px',
+                      background: 'rgba(255,92,92,0.08)',
+                      border: '1px solid rgba(255,92,92,0.25)',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    ⚠ {otpError}
+                  </p>
+                )}
                 <button
                   type="submit"
                   disabled={otpInput.length !== 6 || verifying}
-                  className="rounded-xl bg-[#6ee7b7] text-[#0a0a0f] text-sm font-semibold py-3 hover:bg-[#5dd4a4] disabled:opacity-40 transition-colors"
+                  className="btn btn-primary"
+                  style={{ justifyContent: 'center', padding: '13px', width: '100%', opacity: verifying ? 0.6 : 1 }}
                 >
-                  {verifying ? 'Verifying…' : 'Verify & Continue'}
+                  {verifying ? 'Verifying…' : 'Verify & Continue →'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setStep('email')}
-                  className="text-white/30 text-xs hover:text-white/50 transition-colors"
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontFamily: 'var(--font-mono)', fontSize: '11px',
+                    color: 'var(--text-3)', padding: '4px',
+                  }}
                 >
                   ← Use a different email
                 </button>
@@ -179,7 +248,17 @@ export default function ChatPage() {
           )}
         </div>
 
-        <p className="text-center text-white/20 text-xs mt-4">Powered by ResolveIQ · AI-assisted support</p>
+        <p
+          style={{
+            textAlign: 'center',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '11px',
+            color: 'var(--text-3)',
+            marginTop: '16px',
+          }}
+        >
+          Powered by ZeroDesk · AI-assisted support
+        </p>
       </div>
     </div>
   );

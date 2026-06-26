@@ -5,272 +5,154 @@ import { useParams, useRouter } from 'next/navigation';
 
 type Role = 'CUSTOMER' | 'CDA' | 'DEPT_ADMIN' | 'SUPER_ADMIN';
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
-type ReportStatus =
-  | 'DRAFT' | 'PENDING_CDA' | 'INFO_REQUESTED' | 'APPROVED_TO_DEPT'
-  | 'IN_PROGRESS' | 'COMPLETED' | 'REJECTED' | 'ESCALATED' | 'RESOLVED' | 'CLOSED';
+type ReportStatus = 'DRAFT' | 'PENDING_CDA' | 'INFO_REQUESTED' | 'APPROVED_TO_DEPT' | 'IN_PROGRESS' | 'COMPLETED' | 'REJECTED' | 'ESCALATED' | 'RESOLVED' | 'CLOSED' | 'AUTO_RESOLVED';
 type EscalationDecision = 'OVERRIDE_APPROVE' | 'UPHOLD_CLOSE' | 'NEEDS_MORE_INFO';
+type ActionType = 'approve' | 'reject' | 'info-request' | 'acknowledge' | 'dept-action' | 'escalate' | 'respond' | 'resolve';
 
-interface Actor {
-  id: string;
-  name?: string;
-  email?: string;
-}
+interface Actor { id: string; name?: string; email?: string; }
+interface TimelineEntry { id: string; actorId: string; actorRole: Role; actor: Actor; fromStatus?: ReportStatus | null; toStatus: ReportStatus; note?: string | null; actionTaken?: string | null; isSystemEntry: boolean; createdAt: string; }
+interface Escalation { id: string; escalatedById: string; escalationReason: string; resolvedById?: string | null; resolvedAt?: string | null; resolutionNote?: string | null; decision?: EscalationDecision | null; level: number; createdAt: string; }
+interface Report { id: string; issueType: string; issueSummary: string; actionRequested: string; routeToDeptName: string; priority: Priority; status: ReportStatus; aiConfidence?: number | null; refundAmount?: number | null; resolution?: string | null; slaDeadline?: string | null; slaBreached: boolean; escalationCount: number; createdAt: string; updatedAt: string; timeline: TimelineEntry[]; escalations: Escalation[]; }
 
-interface TimelineEntry {
-  id: string;
-  actorId: string;
-  actorRole: Role;
-  actor: Actor;
-  fromStatus?: ReportStatus | null;
-  toStatus: ReportStatus;
-  note?: string | null;
-  actionTaken?: string | null;
-  isSystemEntry: boolean;
-  createdAt: string;
-}
+// ── Status/priority colors ────────────────────────────────────────────────────
 
-interface Escalation {
-  id: string;
-  escalatedById: string;
-  escalationReason: string;
-  resolvedById?: string | null;
-  resolvedAt?: string | null;
-  resolutionNote?: string | null;
-  decision?: EscalationDecision | null;
-  level: number;
-  createdAt: string;
-}
-
-interface Report {
-  id: string;
-  issueType: string;
-  issueSummary: string;
-  actionRequested: string;
-  routeToDeptName: string;
-  priority: Priority;
-  status: ReportStatus;
-  aiConfidence?: number | null;
-  refundAmount?: number | null;
-  resolution?: string | null;
-  slaDeadline?: string | null;
-  slaBreached: boolean;
-  escalationCount: number;
-  createdAt: string;
-  updatedAt: string;
-  timeline: TimelineEntry[];
-  escalations: Escalation[];
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const STATUS_COLORS: Record<ReportStatus, string> = {
-  DRAFT:            'bg-slate-700/40 text-slate-400 border-slate-600/40',
-  PENDING_CDA:      'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  INFO_REQUESTED:   'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  APPROVED_TO_DEPT: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  IN_PROGRESS:      'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-  COMPLETED:        'bg-[#6ee7b7]/20 text-[#6ee7b7] border-[#6ee7b7]/30',
-  REJECTED:         'bg-red-500/20 text-red-400 border-red-500/30',
-  ESCALATED:        'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  RESOLVED:         'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  CLOSED:           'bg-slate-600/20 text-slate-500 border-slate-600/30',
-};
-
-const PRIORITY_COLORS: Record<Priority, string> = {
-  HIGH:   'text-red-400',
-  MEDIUM: 'text-amber-400',
-  LOW:    'text-slate-400',
-};
-
-const ROLE_LABEL: Record<Role, string> = {
-  CUSTOMER:    'Customer',
-  CDA:         'CDA',
-  DEPT_ADMIN:  'Dept Admin',
-  SUPER_ADMIN: 'Super Admin',
+const STATUS_BG: Partial<Record<ReportStatus, { bg: string; color: string; border: string }>> = {
+  DRAFT:            { bg: 'rgba(115,115,115,0.08)', color: '#737373', border: 'rgba(115,115,115,0.2)' },
+  PENDING_CDA:      { bg: 'rgba(251,191,36,0.08)',  color: '#fbbf24', border: 'rgba(251,191,36,0.2)' },
+  INFO_REQUESTED:   { bg: 'rgba(56,189,248,0.08)',  color: '#38bdf8', border: 'rgba(56,189,248,0.2)' },
+  APPROVED_TO_DEPT: { bg: 'rgba(52,211,153,0.08)',  color: '#34d399', border: 'rgba(52,211,153,0.2)' },
+  IN_PROGRESS:      { bg: 'rgba(56,189,248,0.08)',  color: '#38bdf8', border: 'rgba(56,189,248,0.2)' },
+  COMPLETED:        { bg: 'rgba(52,211,153,0.08)',  color: '#34d399', border: 'rgba(52,211,153,0.2)' },
+  REJECTED:         { bg: 'rgba(248,113,113,0.08)', color: '#f87171', border: 'rgba(248,113,113,0.2)' },
+  ESCALATED:        { bg: 'rgba(251,146,60,0.08)',  color: '#fb923c', border: 'rgba(251,146,60,0.2)' },
+  RESOLVED:         { bg: 'rgba(167,139,250,0.08)', color: '#a78bfa', border: 'rgba(167,139,250,0.2)' },
+  CLOSED:           { bg: 'rgba(115,115,115,0.08)', color: '#404040', border: 'rgba(115,115,115,0.2)' },
+  AUTO_RESOLVED:    { bg: 'rgba(52,211,153,0.08)',  color: '#34d399', border: 'rgba(52,211,153,0.2)' },
 };
 
 const TIMELINE_DOT: Record<Role, string> = {
-  CUSTOMER:    'bg-blue-400',
-  CDA:         'bg-[#6ee7b7]',
-  DEPT_ADMIN:  'bg-purple-400',
-  SUPER_ADMIN: 'bg-orange-400',
+  CUSTOMER:    '#818cf8',
+  CDA:         '#34d399',
+  DEPT_ADMIN:  '#38bdf8',
+  SUPER_ADMIN: '#fb923c',
 };
 
-function SlaTag({ deadline, breached }: { deadline?: string | null; breached: boolean }) {
-  if (!deadline) return null;
-  const diff = new Date(deadline).getTime() - Date.now();
-  const isOver = diff < 0 || breached;
-  const absMs = Math.abs(diff);
-  const h = Math.floor(absMs / 3600000);
-  const m = Math.floor((absMs % 3600000) / 60000);
-  return (
-    <span className={`text-xs font-mono px-2 py-1 rounded border ${
-      isOver
-        ? 'bg-red-900/30 text-red-400 border-red-700/40'
-        : diff < 3600000
-          ? 'bg-amber-900/30 text-amber-400 border-amber-700/40'
-          : 'bg-slate-800 text-slate-400 border-slate-700/40'
-    }`}>
-      {isOver ? `⚠ SLA breached ${h}h ${m}m ago` : `SLA: ${h}h ${m}m left`}
-    </span>
-  );
-}
+const ROLE_LABEL: Record<Role, string> = {
+  CUSTOMER: 'Customer', CDA: 'CDA', DEPT_ADMIN: 'Dept Admin', SUPER_ADMIN: 'Super Admin',
+};
 
-// ── Action Panel ─────────────────────────────────────────────────────────────
+// ── Action modal ──────────────────────────────────────────────────────────────
 
-type ActionType =
-  | 'approve' | 'reject' | 'info-request'
-  | 'acknowledge' | 'dept-action'
-  | 'escalate' | 'respond'
-  | 'resolve';
-
-interface ActionModalProps {
-  type: ActionType;
-  reportId: string;
-  onSuccess: () => void;
-  onClose: () => void;
-}
-
-function ActionModal({ type, reportId, onSuccess, onClose }: ActionModalProps) {
-  const [note, setNote] = useState('');
+function ActionModal({ type, reportId, onSuccess, onClose }: { type: ActionType; reportId: string; onSuccess: () => void; onClose: () => void }) {
+  const [note, setNote]           = useState('');
   const [actionTaken, setActionTaken] = useState('');
-  const [decision, setDecision] = useState<EscalationDecision>('OVERRIDE_APPROVE');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [decision, setDecision]   = useState<EscalationDecision>('OVERRIDE_APPROVE');
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState<string | null>(null);
 
-  const LABELS: Record<ActionType, { title: string; cta: string; noteLabel: string; noteRequired: boolean }> = {
-    'approve':      { title: 'Approve Report',        cta: 'Approve',       noteLabel: 'Note (optional)',         noteRequired: false },
-    'reject':       { title: 'Reject Report',         cta: 'Reject',        noteLabel: 'Rejection reason',        noteRequired: true  },
-    'info-request': { title: 'Request More Info',     cta: 'Send Request',  noteLabel: 'What info do you need?',  noteRequired: true  },
-    'acknowledge':  { title: 'Acknowledge Report',    cta: 'Acknowledge',   noteLabel: 'Note (optional)',         noteRequired: false },
-    'dept-action':  { title: 'Resolve Report',        cta: 'Submit',        noteLabel: 'Resolution note',         noteRequired: true  },
-    'escalate':     { title: 'Escalate Report',       cta: 'Escalate',      noteLabel: 'Reason for escalation',   noteRequired: true  },
-    'respond':      { title: 'Provide More Info',     cta: 'Submit Info',   noteLabel: 'Your response',           noteRequired: true  },
-    'resolve':      { title: 'Resolve Escalation',   cta: 'Submit',        noteLabel: 'Resolution note',         noteRequired: true  },
+  const CFG: Record<ActionType, { title: string; cta: string; noteLabel: string; req: boolean }> = {
+    approve:      { title: 'Approve Report',      cta: 'Approve',      noteLabel: 'Note (optional)',        req: false },
+    reject:       { title: 'Reject Report',       cta: 'Reject',       noteLabel: 'Rejection reason',       req: true  },
+    'info-request': { title: 'Request More Info', cta: 'Send Request', noteLabel: 'What info do you need?', req: true  },
+    acknowledge:  { title: 'Acknowledge',         cta: 'Acknowledge',  noteLabel: 'Note (optional)',        req: false },
+    'dept-action': { title: 'Resolve Report',     cta: 'Submit',       noteLabel: 'Resolution note',        req: true  },
+    escalate:     { title: 'Escalate Report',     cta: 'Escalate',     noteLabel: 'Reason for escalation',  req: true  },
+    respond:      { title: 'Provide More Info',   cta: 'Submit Info',  noteLabel: 'Your response',          req: true  },
+    resolve:      { title: 'Resolve Escalation',  cta: 'Submit',       noteLabel: 'Resolution note',        req: true  },
   };
 
-  const cfg = LABELS[type];
+  const cfg = CFG[type];
+
+  const ENDPOINTS: Record<ActionType, string> = {
+    approve: `/api/workflow/approve/${reportId}`,
+    reject: `/api/workflow/reject/${reportId}`,
+    'info-request': `/api/workflow/info-request/${reportId}`,
+    acknowledge: `/api/workflow/acknowledge/${reportId}`,
+    'dept-action': `/api/workflow/action/${reportId}`,
+    escalate: `/api/workflow/escalate/${reportId}`,
+    respond: `/api/workflow/respond/${reportId}`,
+    resolve: `/api/workflow/resolve/${reportId}`,
+  };
+
+  const BODIES: Record<ActionType, object> = {
+    approve: { note: note || undefined },
+    reject: { note },
+    'info-request': { note },
+    acknowledge: {},
+    'dept-action': { note, actionTaken },
+    escalate: { reason: note },
+    respond: { note },
+    resolve: { decision, note },
+  };
 
   async function submit() {
-    if (cfg.noteRequired && !note.trim()) { setError('This field is required.'); return; }
+    if (cfg.req && !note.trim()) { setError('This field is required.'); return; }
     if (type === 'dept-action' && !actionTaken.trim()) { setError('Action Taken is required.'); return; }
-
-    setLoading(true);
-    setError(null);
-
-    const endpointMap: Record<ActionType, string> = {
-      'approve':      `/api/workflow/approve/${reportId}`,
-      'reject':       `/api/workflow/reject/${reportId}`,
-      'info-request': `/api/workflow/info-request/${reportId}`,
-      'acknowledge':  `/api/workflow/acknowledge/${reportId}`,
-      'dept-action':  `/api/workflow/action/${reportId}`,
-      'escalate':     `/api/workflow/escalate/${reportId}`,
-      'respond':      `/api/workflow/respond/${reportId}`,
-      'resolve':      `/api/workflow/resolve/${reportId}`,
-    };
-
-    const bodyMap: Record<ActionType, object> = {
-      'approve':      { note: note || undefined },
-      'reject':       { note },
-      'info-request': { note },
-      'acknowledge':  {},
-      'dept-action':  { note, actionTaken },
-      'escalate':     { reason: note },
-      'respond':      { note },
-      'resolve':      { decision, note },
-    };
-
+    setLoading(true); setError(null);
     try {
-      const res = await fetch(endpointMap[type], {
+      const res = await fetch(ENDPOINTS[type], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(bodyMap[type]),
+        body: JSON.stringify(BODIES[type]),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { message?: string };
         throw new Error(err.message ?? 'Request failed');
       }
       onSuccess();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError(e instanceof Error ? e.message : 'Unknown error'); }
+    finally { setLoading(false); }
   }
 
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        className="bg-[#12121a] border border-slate-700/60 rounded-2xl p-6 w-full max-w-md shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-[#6ee7b7] font-semibold text-lg mb-5">{cfg.title}</h2>
+  const inp: React.CSSProperties = { width: '100%', background: '#0a0a0a', border: '1px solid #262626', borderRadius: '6px', padding: '10px 12px', fontSize: '13px', color: '#ffffff', outline: 'none', resize: 'none' as const, fontFamily: 'Inter, sans-serif', transition: 'border-color 0.12s' };
+  const lbl: React.CSSProperties = { fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#404040', display: 'block', marginBottom: '6px' };
+  const isDanger = type === 'reject' || type === 'escalate';
 
-        {/* Decision selector for resolve */}
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '20px' }} onClick={onClose}>
+      <div style={{ background: '#111111', border: '1px solid #262626', borderRadius: '10px', padding: '24px', width: '100%', maxWidth: '420px', boxShadow: '0 24px 48px rgba(0,0,0,0.6)' }} onClick={e => e.stopPropagation()}>
+        <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '16px', fontWeight: 600, color: '#ffffff', marginBottom: '20px' }}>{cfg.title}</p>
+
         {type === 'resolve' && (
-          <div className="mb-4">
-            <label className="block text-xs text-slate-500 mb-2 uppercase tracking-wider">Decision</label>
-            <div className="flex flex-col gap-2">
-              {(['OVERRIDE_APPROVE', 'UPHOLD_CLOSE', 'NEEDS_MORE_INFO'] as EscalationDecision[]).map((d) => (
-                <label key={d} className="flex items-center gap-3 cursor-pointer group">
-                  <input
-                    type="radio"
-                    name="decision"
-                    value={d}
-                    checked={decision === d}
-                    onChange={() => setDecision(d)}
-                    className="accent-[#6ee7b7]"
-                  />
-                  <span className={`text-sm ${decision === d ? 'text-[#6ee7b7]' : 'text-slate-400'}`}>
-                    {d === 'OVERRIDE_APPROVE' ? '✓ Override & Approve → RESOLVED'
-                      : d === 'UPHOLD_CLOSE' ? '✕ Uphold Rejection → CLOSED'
-                      : '? Needs More Info → INFO_REQUESTED'}
-                  </span>
-                </label>
-              ))}
-            </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={lbl}>Decision</label>
+            {(['OVERRIDE_APPROVE', 'UPHOLD_CLOSE', 'NEEDS_MORE_INFO'] as EscalationDecision[]).map(d => (
+              <label key={d} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', cursor: 'pointer' }}>
+                <input type="radio" name="decision" value={d} checked={decision === d} onChange={() => setDecision(d)} style={{ accentColor: '#34d399' }} />
+                <span style={{ fontSize: '13px', color: decision === d ? '#34d399' : '#737373' }}>
+                  {d === 'OVERRIDE_APPROVE' ? '✓ Override & Approve → RESOLVED' : d === 'UPHOLD_CLOSE' ? '✕ Uphold Rejection → CLOSED' : '? Needs More Info → INFO_REQUESTED'}
+                </span>
+              </label>
+            ))}
           </div>
         )}
 
-        <label className="block text-xs text-slate-500 mb-1 uppercase tracking-wider">{cfg.noteLabel}</label>
-        <textarea
-          className="w-full bg-[#0a0a0f] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#6ee7b7]/50 mb-3 resize-none"
-          rows={3}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder={cfg.noteRequired ? 'Required…' : 'Optional…'}
-        />
+        <label style={lbl}>{cfg.noteLabel}</label>
+        <textarea style={{ ...inp, marginBottom: '14px' }} rows={3} value={note} onChange={e => setNote(e.target.value)} placeholder={cfg.req ? 'Required…' : 'Optional…'}
+          onFocus={e => (e.target.style.borderColor = '#404040')} onBlur={e => (e.target.style.borderColor = '#262626')} />
 
         {type === 'dept-action' && (
           <>
-            <label className="block text-xs text-slate-500 mb-1 uppercase tracking-wider">Action Taken</label>
-            <input
-              className="w-full bg-[#0a0a0f] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#6ee7b7]/50 mb-4"
-              placeholder="e.g. Refund processed, Account updated…"
-              value={actionTaken}
-              onChange={(e) => setActionTaken(e.target.value)}
-            />
+            <label style={lbl}>Action Taken</label>
+            <input style={{ ...inp, marginBottom: '16px' }} type="text" placeholder="e.g. Refund processed, Account updated…" value={actionTaken} onChange={e => setActionTaken(e.target.value)}
+              onFocus={e => (e.target.style.borderColor = '#404040')} onBlur={e => (e.target.style.borderColor = '#262626')} />
           </>
         )}
 
-        {error && (
-          <p className="text-red-400 text-xs mb-3 bg-red-900/20 border border-red-800/40 rounded px-3 py-2">{error}</p>
-        )}
+        {error && <div style={{ padding: '8px 12px', marginBottom: '16px', background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '5px', fontSize: '12px', color: '#f87171' }}>{error}</div>}
 
-        <div className="flex gap-3 justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors">
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={loading}
-            className={`px-5 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 ${
-              type === 'reject' || type === 'escalate'
-                ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
-                : 'bg-[#6ee7b7] text-[#0a0a0f] hover:bg-[#4dd9a4]'
-            }`}
-          >
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid #262626', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', color: '#737373', fontFamily: 'Inter, sans-serif' }}>Cancel</button>
+          <button onClick={submit} disabled={loading} style={{
+            padding: '8px 20px', border: '1px solid',
+            background: isDanger ? 'rgba(248,113,113,0.08)' : '#ffffff',
+            color: isDanger ? '#f87171' : '#000000',
+            borderColor: isDanger ? 'rgba(248,113,113,0.25)' : 'transparent',
+            borderRadius: '6px', cursor: loading ? 'not-allowed' : 'pointer',
+            fontFamily: 'Inter, sans-serif', fontSize: '13px', fontWeight: 500,
+            opacity: loading ? 0.6 : 1, transition: 'all 0.12s',
+          }}>
             {loading ? 'Submitting…' : cfg.cta}
           </button>
         </div>
@@ -279,28 +161,26 @@ function ActionModal({ type, reportId, onSuccess, onClose }: ActionModalProps) {
   );
 }
 
-// ── Main Page ────────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function ReportDetailPage() {
-  const params = useParams();
+  const { id } = useParams() as { id: string };
   const router = useRouter();
-  const reportId = params.id as string;
 
-  const [report, setReport] = useState<Report | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [report, setReport]       = useState<Report | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<ActionType | null>(null);
-
-  const [error, setError] = useState<string | null>(null);
-
-  const [userRole, setUserRole] = useState<Role>('CUSTOMER');
-  const [userId, setUserId] = useState('');
+  const [userRole, setUserRole]   = useState<Role>('CUSTOMER');
+  const [userId, setUserId]       = useState('');
 
   useEffect(() => {
     fetch('/api/auth/me', { credentials: 'include' })
-      .then(r => r.json())
-      .then(u => {
-        setUserRole(u.role);
-        setUserId(u.id);
+      .then(r => r.ok ? r.json() : null)
+      .then((u: { role?: Role; id?: string } | null) => {
+        if (!u) return;
+        setUserRole(u.role ?? 'CUSTOMER');
+        setUserId(u.id ?? '');
       })
       .catch(() => {});
   }, []);
@@ -308,138 +188,112 @@ export default function ReportDetailPage() {
   const fetchReport = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/reports/${reportId}`, {
-        credentials: 'include',
-      });
-  
-      if (res.status === 404) {
-        setError('Report not found');
-        return;
-      }
-  
-      if (!res.ok) {
-        setError(`Failed to load report (${res.status})`);
-        return;
-      }
-  
+      const res = await fetch(`/api/reports/${id}`, { credentials: 'include' });
+      if (res.status === 404) { setError('Report not found'); return; }
+      if (!res.ok) { setError(`Failed to load (${res.status})`); return; }
       setReport(await res.json() as Report);
-    } catch (err) {
-      setError('Network error — is the backend running?');
-    } finally {
-      setLoading(false);
-    }
-  }, [reportId]);
+    } catch { setError('Network error — is the backend running?'); }
+    finally { setLoading(false); }
+  }, [id]);
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
-  // ── Role-aware available actions ────────────────────────────
   function availableActions(r: Report): ActionType[] {
-    const s = r.status;
     switch (userRole) {
       case 'CDA':
-        if (s === 'PENDING_CDA') return ['approve', 'reject', 'info-request'];
-        return [];
+        return r.status === 'PENDING_CDA' ? ['approve', 'reject', 'info-request'] : [];
       case 'DEPT_ADMIN':
-        if (s === 'APPROVED_TO_DEPT') return ['acknowledge', 'dept-action'];
-        if (s === 'IN_PROGRESS') return ['dept-action', 'reject'];
+        if (r.status === 'APPROVED_TO_DEPT') return ['acknowledge', 'dept-action'];
+        if (r.status === 'IN_PROGRESS') return ['dept-action', 'reject'];
         return [];
       case 'CUSTOMER':
-        if (s === 'REJECTED') return ['escalate'];
-        if (s === 'INFO_REQUESTED' && r.timeline.some((t) => t.actorId === userId)) return ['respond'];
+        if (r.status === 'REJECTED') return ['escalate'];
+        if (r.status === 'INFO_REQUESTED' && r.timeline.some(t => t.actorId === userId)) return ['respond'];
         return [];
       case 'SUPER_ADMIN':
-        if (s === 'ESCALATED') return ['resolve'];
-        return [];
-      default:
-        return [];
+        return r.status === 'ESCALATED' ? ['resolve'] : [];
+      default: return [];
     }
   }
 
   const ACTION_LABELS: Record<ActionType, string> = {
-    'approve':      'Approve',
-    'reject':       'Reject',
-    'info-request': 'Request Info',
-    'acknowledge':  'Acknowledge',
-    'dept-action':  'Take Action',
-    'escalate':     'Escalate',
-    'respond':      'Respond',
-    'resolve':      'Resolve Escalation',
+    approve: 'Approve', reject: 'Reject', 'info-request': 'Request Info',
+    acknowledge: 'Acknowledge', 'dept-action': 'Take Action',
+    escalate: 'Escalate', respond: 'Respond', resolve: 'Resolve Escalation',
   };
 
-  const ACTION_STYLES: Record<ActionType, string> = {
-    'approve':      'bg-[#6ee7b7]/10 text-[#6ee7b7] border border-[#6ee7b7]/30 hover:bg-[#6ee7b7]/20',
-    'reject':       'bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20',
-    'info-request': 'bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20',
-    'acknowledge':  'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20',
-    'dept-action':  'bg-[#6ee7b7]/10 text-[#6ee7b7] border border-[#6ee7b7]/30 hover:bg-[#6ee7b7]/20',
-    'escalate':     'bg-orange-500/10 text-orange-400 border border-orange-500/30 hover:bg-orange-500/20',
-    'respond':      'bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20',
-    'resolve':      'bg-purple-500/10 text-purple-400 border border-purple-500/30 hover:bg-purple-500/20',
+  const ACTION_STYLE: Record<ActionType, React.CSSProperties> = {
+    approve:        { background: 'transparent', border: '1px solid #262626', color: '#ffffff' },
+    reject:         { background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' },
+    'info-request': { background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.25)', color: '#38bdf8' },
+    acknowledge:    { background: 'transparent', border: '1px solid #262626', color: '#ffffff' },
+    'dept-action':  { background: 'transparent', border: '1px solid #262626', color: '#ffffff' },
+    escalate:       { background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.25)', color: '#fb923c' },
+    respond:        { background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.25)', color: '#38bdf8' },
+    resolve:        { background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa' },
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <span className="text-slate-600 animate-pulse text-sm">Loading report…</span>
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <span className="text-red-400 text-sm">{error}</span>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh' }}>
+      <span style={{ color: '#333333', fontSize: '13px', animation: 'pulse 1.5s ease infinite' }}>Loading report…</span>
+    </div>
+  );
+  if (error) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh' }}>
+      <span style={{ color: '#f87171', fontSize: '13px' }}>{error}</span>
+    </div>
+  );
+  if (!report) return null;
 
-  if (!report) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <span className="text-red-400 text-sm">Report not found.</span>
-      </div>
-    );
-  }
-
+  const st = STATUS_BG[report.status] ?? { bg: 'rgba(115,115,115,0.08)', color: '#737373', border: 'rgba(115,115,115,0.2)' };
   const actions = availableActions(report);
 
-  return (
-    <div className="min-h-screen bg-[#0a0a0f] text-slate-100 p-6 font-sans max-w-4xl mx-auto">
+  // SLA
+  const slaMs = report.slaDeadline ? new Date(report.slaDeadline).getTime() - Date.now() : null;
+  const slaBreached = slaMs !== null && (slaMs < 0 || report.slaBreached);
+  const slaH = slaMs !== null ? Math.floor(Math.abs(slaMs) / 3600000) : 0;
+  const slaM = slaMs !== null ? Math.floor((Math.abs(slaMs) % 3600000) / 60000) : 0;
 
+  return (
+    <div style={{ maxWidth: '800px', fontFamily: 'Inter, sans-serif' }}>
       {/* Back */}
-      <button
-        onClick={() => router.back()}
-        className="text-xs text-slate-500 hover:text-[#6ee7b7] transition-colors mb-6 flex items-center gap-1"
+      <button onClick={() => router.back()} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#404040', marginBottom: '24px', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '6px', transition: 'color 0.12s', padding: 0 }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#ffffff')}
+        onMouseLeave={e => (e.currentTarget.style.color = '#404040')}
       >
         ← Back
       </button>
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '24px' }}>
         <div>
-          <p className="text-xs font-mono text-slate-500 mb-1">#{report.id.slice(-8).toUpperCase()}</p>
-          <h1 className="text-xl font-bold text-white leading-snug">{report.issueSummary}</h1>
-          <div className="flex flex-wrap gap-2 mt-3 items-center">
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${STATUS_COLORS[report.status]}`}>
+          <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '11px', color: '#333333', marginBottom: '6px' }}>
+            #{report.id.slice(-8).toUpperCase()}
+          </p>
+          <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '20px', fontWeight: 600, color: '#ffffff', marginBottom: '12px', lineHeight: 1.3, letterSpacing: '-0.01em' }}>
+            {report.issueSummary}
+          </h1>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '4px', fontFamily: 'Space Grotesk, sans-serif', background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>
               {report.status.replace(/_/g, ' ')}
             </span>
-            <span className={`text-xs font-semibold ${PRIORITY_COLORS[report.priority]}`}>
+            <span style={{ fontSize: '11px', color: report.priority === 'HIGH' ? '#f87171' : report.priority === 'MEDIUM' ? '#fbbf24' : '#737373', fontWeight: 600, fontFamily: 'Space Grotesk, sans-serif' }}>
               ● {report.priority}
             </span>
-            <span className="text-xs text-slate-500">{report.issueType}</span>
-            <span className="text-xs text-slate-500">→ {report.routeToDeptName}</span>
-            <SlaTag deadline={report.slaDeadline} breached={report.slaBreached} />
+            <span style={{ fontSize: '11px', color: '#404040' }}>{report.issueType}</span>
+            <span style={{ fontSize: '11px', color: '#333333' }}>→ {report.routeToDeptName}</span>
+            {slaMs !== null && (
+              <span style={{ fontSize: '11px', fontFamily: 'Space Grotesk, sans-serif', padding: '3px 8px', borderRadius: '4px', border: '1px solid', background: slaBreached ? 'rgba(248,113,113,0.08)' : slaMs < 3600000 ? 'rgba(251,191,36,0.08)' : '#0a0a0a', color: slaBreached ? '#f87171' : slaMs < 3600000 ? '#fbbf24' : '#404040', borderColor: slaBreached ? 'rgba(248,113,113,0.2)' : slaMs < 3600000 ? 'rgba(251,191,36,0.2)' : '#1a1a1a' }}>
+                {slaBreached ? `⚠ SLA breached ${slaH}h ${slaM}m ago` : `SLA: ${slaH}h ${slaM}m left`}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Action buttons */}
         {actions.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {actions.map((a) => (
-              <button
-                key={a}
-                onClick={() => setActiveAction(a)}
-                className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors ${ACTION_STYLES[a]}`}
-              >
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {actions.map(a => (
+              <button key={a} onClick={() => setActiveAction(a)} style={{ padding: '7px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500, fontFamily: 'Inter, sans-serif', transition: 'all 0.12s', ...ACTION_STYLE[a] }}>
                 {ACTION_LABELS[a]}
               </button>
             ))}
@@ -448,128 +302,104 @@ export default function ReportDetailPage() {
       </div>
 
       {/* Meta grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '28px' }}>
         {[
           { label: 'Action Requested', value: report.actionRequested },
           { label: 'AI Confidence', value: report.aiConfidence != null ? `${Math.round(report.aiConfidence * 100)}%` : '—' },
           { label: 'Refund Amount', value: report.refundAmount != null ? `₹${report.refundAmount.toLocaleString('en-IN')}` : '—' },
           { label: 'Submitted', value: new Date(report.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) },
         ].map(({ label, value }) => (
-          <div key={label} className="bg-[#12121a] border border-slate-800/60 rounded-xl p-4">
-            <p className="text-xs text-slate-500 mb-1">{label}</p>
-            <p className="text-sm text-slate-200 font-medium">{value}</p>
+          <div key={label} style={{ background: '#080808', border: '1px solid #1a1a1a', borderRadius: '8px', padding: '14px 16px' }}>
+            <p style={{ fontSize: '10px', color: '#333333', marginBottom: '4px', fontFamily: 'Space Grotesk, sans-serif', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</p>
+            <p style={{ fontSize: '13px', color: '#a3a3a3', fontWeight: 500 }}>{value}</p>
           </div>
         ))}
       </div>
 
-      {/* Resolution (if complete) */}
+      {/* Resolution */}
       {report.resolution && (
-        <div className="bg-[#6ee7b7]/5 border border-[#6ee7b7]/20 rounded-xl p-4 mb-8">
-          <p className="text-xs text-[#6ee7b7] uppercase tracking-wider mb-1">Resolution</p>
-          <p className="text-sm text-slate-300">{report.resolution}</p>
+        <div style={{ background: 'rgba(52,211,153,0.05)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: '8px', padding: '16px', marginBottom: '24px' }}>
+          <p style={{ fontSize: '11px', color: '#34d399', fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Resolution</p>
+          <p style={{ fontSize: '13px', color: '#a3a3a3', lineHeight: 1.6 }}>{report.resolution}</p>
         </div>
       )}
 
       {/* Escalations */}
       {report.escalations.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">
+        <div style={{ marginBottom: '28px' }}>
+          <p style={{ fontSize: '11px', color: '#333333', fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '12px' }}>
             Escalations ({report.escalations.length})
-          </h2>
-          <div className="flex flex-col gap-3">
-            {report.escalations.map((esc) => (
-              <div key={esc.id} className="bg-orange-900/10 border border-orange-700/30 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-orange-400 font-semibold">Level {esc.level}</span>
-                  <span className="text-xs text-slate-500 font-mono">
-                    {new Date(esc.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
-                  </span>
-                </div>
-                <p className="text-sm text-slate-300 mb-2">{esc.escalationReason}</p>
-                {esc.decision && (
-                  <div className="mt-2 pt-2 border-t border-orange-700/20">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                      esc.decision === 'OVERRIDE_APPROVE' ? 'bg-[#6ee7b7]/20 text-[#6ee7b7]'
-                      : esc.decision === 'UPHOLD_CLOSE' ? 'bg-red-500/20 text-red-400'
-                      : 'bg-blue-500/20 text-blue-400'
-                    }`}>
-                      {esc.decision.replace(/_/g, ' ')}
-                    </span>
-                    {esc.resolutionNote && (
-                      <p className="text-xs text-slate-400 mt-1">{esc.resolutionNote}</p>
-                    )}
-                  </div>
-                )}
+          </p>
+          {report.escalations.map(esc => (
+            <div key={esc.id} style={{ background: 'rgba(251,146,60,0.05)', border: '1px solid rgba(251,146,60,0.15)', borderRadius: '8px', padding: '16px', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '11px', color: '#fb923c', fontWeight: 600, fontFamily: 'Space Grotesk, sans-serif' }}>Level {esc.level}</span>
+                <span style={{ fontSize: '11px', color: '#333333', fontFamily: 'Space Grotesk, sans-serif' }}>
+                  {new Date(esc.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                </span>
               </div>
-            ))}
-          </div>
+              <p style={{ fontSize: '13px', color: '#a3a3a3', lineHeight: 1.6 }}>{esc.escalationReason}</p>
+              {esc.decision && (
+                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(251,146,60,0.15)' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', fontFamily: 'Space Grotesk, sans-serif', background: esc.decision === 'OVERRIDE_APPROVE' ? 'rgba(52,211,153,0.08)' : esc.decision === 'UPHOLD_CLOSE' ? 'rgba(248,113,113,0.08)' : 'rgba(56,189,248,0.08)', color: esc.decision === 'OVERRIDE_APPROVE' ? '#34d399' : esc.decision === 'UPHOLD_CLOSE' ? '#f87171' : '#38bdf8' }}>
+                    {esc.decision.replace(/_/g, ' ')}
+                  </span>
+                  {esc.resolutionNote && <p style={{ fontSize: '12px', color: '#737373', marginTop: '6px' }}>{esc.resolutionNote}</p>}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
       {/* Timeline */}
       <div>
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">
+        <p style={{ fontSize: '11px', color: '#333333', fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '16px' }}>
           Timeline ({report.timeline.length})
-        </h2>
-        <div className="relative">
-          {/* Vertical line */}
-          <div className="absolute left-[7px] top-2 bottom-2 w-px bg-slate-800" />
-
-          <div className="flex flex-col gap-6">
-            {report.timeline.map((entry) => (
-              <div key={entry.id} className="flex gap-4 relative">
-                {/* Dot */}
-                <div className={`w-3.5 h-3.5 rounded-full mt-0.5 shrink-0 z-10 ${TIMELINE_DOT[entry.actorRole]} ${entry.isSystemEntry ? 'opacity-40' : ''}`} />
-
-                <div className="flex-1 pb-1">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="text-xs font-semibold text-slate-300">
-                      {entry.actor?.name ?? entry.actorId}
+        </p>
+        <div style={{ position: 'relative' }}>
+          <div style={{ position: 'absolute', left: '6px', top: '8px', bottom: '8px', width: '1px', background: '#1a1a1a' }} />
+          {report.timeline.map(entry => (
+            <div key={entry.id} style={{ display: 'flex', gap: '16px', marginBottom: '20px', position: 'relative' }}>
+              <div style={{ width: '13px', height: '13px', borderRadius: '50%', background: TIMELINE_DOT[entry.actorRole], flexShrink: 0, marginTop: '2px', zIndex: 1, opacity: entry.isSystemEntry ? 0.35 : 1 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: '#a3a3a3' }}>
+                    {entry.actor?.name ?? entry.actorId}
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#333333' }}>{ROLE_LABEL[entry.actorRole]}</span>
+                  {entry.fromStatus && (
+                    <span style={{ fontSize: '11px', color: '#333333', fontFamily: 'Space Grotesk, sans-serif' }}>
+                      {entry.fromStatus.replace(/_/g, ' ')} → <span style={{ color: '#737373' }}>{entry.toStatus.replace(/_/g, ' ')}</span>
                     </span>
-                    <span className="text-xs text-slate-600">{ROLE_LABEL[entry.actorRole]}</span>
-                    {entry.fromStatus && (
-                      <span className="text-xs text-slate-600">
-                        <span className="font-mono">{entry.fromStatus.replace(/_/g, ' ')}</span>
-                        {' → '}
-                        <span className="font-mono text-slate-400">{entry.toStatus.replace(/_/g, ' ')}</span>
-                      </span>
-                    )}
-                    {!entry.fromStatus && (
-                      <span className="text-xs font-mono text-slate-500">{entry.toStatus.replace(/_/g, ' ')}</span>
-                    )}
-                    {entry.isSystemEntry && (
-                      <span className="text-xs text-slate-700 italic">system</span>
-                    )}
-                    <span className="text-xs text-slate-600 ml-auto font-mono">
-                      {new Date(entry.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
-                    </span>
-                  </div>
-                  {entry.note && (
-                    <p className="text-sm text-slate-400 bg-[#12121a] border border-slate-800/60 rounded-lg px-3 py-2 mt-1">
-                      {entry.note}
-                    </p>
                   )}
-                  {entry.actionTaken && (
-                    <p className="text-xs text-[#6ee7b7] mt-1">
-                      Action: {entry.actionTaken}
-                    </p>
+                  {!entry.fromStatus && (
+                    <span style={{ fontSize: '11px', color: '#404040', fontFamily: 'Space Grotesk, sans-serif' }}>{entry.toStatus.replace(/_/g, ' ')}</span>
                   )}
+                  {entry.isSystemEntry && <span style={{ fontSize: '10px', color: '#262626', fontStyle: 'italic' }}>system</span>}
+                  <span style={{ fontSize: '11px', color: '#262626', fontFamily: 'Space Grotesk, sans-serif', marginLeft: 'auto' }}>
+                    {new Date(entry.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                  </span>
                 </div>
+                {entry.note && (
+                  <p style={{ fontSize: '13px', color: '#737373', background: '#080808', border: '1px solid #1a1a1a', borderRadius: '6px', padding: '10px 12px', lineHeight: 1.5 }}>
+                    {entry.note}
+                  </p>
+                )}
+                {entry.actionTaken && (
+                  <p style={{ fontSize: '12px', color: '#34d399', marginTop: '4px' }}>Action: {entry.actionTaken}</p>
+                )}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Action Modal */}
       {activeAction && (
-        <ActionModal
-          type={activeAction}
-          reportId={report.id}
-          onSuccess={() => { setActiveAction(null); fetchReport(); }}
-          onClose={() => setActiveAction(null)}
-        />
+        <ActionModal type={activeAction} reportId={report.id} onSuccess={() => { setActiveAction(null); fetchReport(); }} onClose={() => setActiveAction(null)} />
       )}
+
+      <style>{`@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}`}</style>
     </div>
   );
 }

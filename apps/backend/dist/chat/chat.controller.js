@@ -41,9 +41,6 @@ let ChatController = class ChatController {
             return { error: 'Order not found' };
         return order;
     }
-    async message(body, res) {
-        await this.chatService.streamMessage(body.conversationId, body.messages, res, body.orderContext, body.customerEmail);
-    }
 };
 exports.ChatController = ChatController;
 __decorate([
@@ -90,14 +87,6 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], ChatController.prototype, "lookupOrder", null);
-__decorate([
-    (0, common_1.Post)('message'),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Res)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
-    __metadata("design:returntype", Promise)
-], ChatController.prototype, "message", null);
 exports.ChatController = ChatController = __decorate([
     (0, common_1.Controller)('chat'),
     __metadata("design:paramtypes", [chat_service_1.ChatService])

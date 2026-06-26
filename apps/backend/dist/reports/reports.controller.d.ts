@@ -11,6 +11,11 @@ interface CreateReportBody {
     priority: Priority;
     aiConfidence: number;
     rawConversation: object[];
+    eligible?: boolean;
+    recommendedAction?: string;
+    refundAmount?: number | null;
+    shopifyOrderId?: string;
+    shopifyOrderNumber?: string;
 }
 interface ListQuery {
     status?: ReportStatus;
@@ -30,7 +35,7 @@ interface AuthRequest {
 export declare class ReportsController {
     private readonly reportsService;
     constructor(reportsService: ReportsService);
-    create(body: CreateReportBody, req: AuthRequest): Promise<{
+    create(body: CreateReportBody): Promise<{
         id: string;
         status: import(".prisma/client").$Enums.ReportStatus;
         createdAt: Date;
@@ -97,13 +102,13 @@ export declare class ReportsController {
             id: string;
             createdAt: Date;
             reportId: string;
-            escalatedById: string;
             escalationReason: string;
-            resolvedById: string | null;
             resolvedAt: Date | null;
             resolutionNote: string | null;
             decision: import(".prisma/client").$Enums.EscalationDecision | null;
             level: number;
+            escalatedById: string;
+            resolvedById: string | null;
         }[];
     } & {
         id: string;

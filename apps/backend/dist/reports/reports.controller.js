@@ -15,16 +15,24 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ReportsController = void 0;
 const common_1 = require("@nestjs/common");
 const reports_service_1 = require("./reports.service");
-const mock_auth_guard_1 = require("../auth/mock-auth.guard");
-const client_1 = require("@prisma/client");
+const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 let ReportsController = class ReportsController {
     constructor(reportsService) {
         this.reportsService = reportsService;
     }
-    create(body, req) {
-        if (req.user.role !== client_1.Role.CUSTOMER)
-            throw new common_1.ForbiddenException('CUSTOMER role required');
-        return this.reportsService.create(body);
+    create(body) {
+        return this.reportsService.create({
+            tenantId: body.tenantId,
+            customerId: body.customerId,
+            conversationId: body.conversationId,
+            issueType: body.issueType,
+            issueSummary: body.issueSummary,
+            actionRequested: body.actionRequested,
+            routeToDeptName: body.routeToDeptName,
+            priority: body.priority,
+            aiConfidence: body.aiConfidence,
+            rawConversation: body.rawConversation,
+        });
     }
     list(query, req) {
         return this.reportsService.list(req.user, query);
@@ -37,12 +45,12 @@ exports.ReportsController = ReportsController;
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], ReportsController.prototype, "create", null);
 __decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Get)(),
     __param(0, (0, common_1.Query)()),
     __param(1, (0, common_1.Request)()),
@@ -51,6 +59,7 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ReportsController.prototype, "list", null);
 __decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Get)(':id'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Request)()),
@@ -59,7 +68,6 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ReportsController.prototype, "findOne", null);
 exports.ReportsController = ReportsController = __decorate([
-    (0, common_1.UseGuards)(mock_auth_guard_1.MockAuthGuard),
     (0, common_1.Controller)('reports'),
     __metadata("design:paramtypes", [reports_service_1.ReportsService])
 ], ReportsController);

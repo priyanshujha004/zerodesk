@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import Anthropic from '@anthropic-ai/sdk';
 import { ShopifyService, MappedOrder } from './shopify.service';
 import { Response } from 'express';
 import { Resend } from 'resend';
+
+// ── Removed: Anthropic import (unused — we use Gemini) ──────────────────────
 
 type OrderContext = MappedOrder;
 
@@ -12,106 +13,117 @@ interface ChatMessage {
   content: string;
 }
 
-interface ReturnPolicy {
-  returnWindowDays: number;
-  allowedReasons: string[];
-  nonReturnableCategories: string[];
-  autoApproveBelow: number;
-}
+const DEFAULT_TENANT_ID = 'tenant_shopease';
 
-const DEFAULT_POLICY: ReturnPolicy = {
-  returnWindowDays: 30,
-  allowedReasons: ['defective', 'wrong item', 'not as described', 'damaged in shipping', 'changed mind'],
-  nonReturnableCategories: ['perishables', 'digital downloads', 'gift cards'],
-  autoApproveBelow: 500000,
-};
-
-const otpStore = new Map<string, { code: string; expiresAt: number }>();
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
-  private readonly anthropic = new Anthropic();
-  private readonly resend = new Resend(process.env.RESEND_API_KEY);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly shopifyService: ShopifyService,
   ) {}
 
+  // ── OTP — stored in DB, survives Railway restarts ──────────────────────────
+
   async sendOtp(email: string): Promise<{ sent: boolean }> {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    otpStore.set(email, { code, expiresAt: Date.now() + 10 * 60 * 1000 });
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Store in DB — upsert so resend works cleanly
+    await this.prisma.otpCode.upsert({
+      where: { email },
+      update: { code, expiresAt, used: false },
+      create: { email, code, expiresAt },
+    });
+
     this.logger.log(`[OTP] ${email} → ${code}`);
 
+    // Send via Resend — uses verified sender if available, logs code as fallback
     try {
-      await this.resend.emails.send({
-        from: 'onboarding@resend.dev',
-        to: email,
+      const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev';
+      const toEmail = process.env.NODE_ENV === 'production'
+        ? email
+        : (process.env.RESEND_TEST_TO ?? email); // In dev, override to your Resend account email
+
+      await resend.emails.send({
+        from: fromEmail,
+        to: toEmail,
         subject: 'Your ShopEase verification code',
         html: `
           <div style="font-family:sans-serif;max-width:400px;margin:0 auto;padding:24px;border:1px solid #eee;border-radius:12px">
-            <h2 style="color:#0a0a0f;margin-bottom:4px">ShopEase Support</h2>
+            <h2 style="color:#080810;margin-bottom:4px">ShopEase Support</h2>
             <p style="color:#666;margin-top:0">Your verification code:</p>
-            <div style="font-size:40px;font-weight:bold;letter-spacing:10px;color:#059669;padding:20px 0">${code}</div>
+            <div style="font-size:40px;font-weight:bold;letter-spacing:10px;color:#b6ff6e;padding:20px 0">${code}</div>
             <p style="color:#999;font-size:13px">Valid for 10 minutes. Do not share this code.</p>
           </div>`,
       });
-      this.logger.log(`[OTP] Email sent to ${email}`);
+      this.logger.log(`[OTP] Email sent → ${toEmail}`);
     } catch (err) {
-      this.logger.error(`[OTP] Resend failed for ${email}`, err);
+      // Email failure is non-fatal — code is in DB and logs
+      this.logger.warn(`[OTP] Email failed for ${email} — code still valid via logs`, err);
     }
 
     return { sent: true };
   }
 
   async verifyOtp(email: string, code: string): Promise<{ valid: boolean }> {
-    const entry = otpStore.get(email);
+    const entry = await this.prisma.otpCode.findUnique({ where: { email } });
+
     if (!entry) return { valid: false };
-    if (Date.now() > entry.expiresAt) { otpStore.delete(email); return { valid: false }; }
+    if (entry.used) return { valid: false };
+    if (new Date() > entry.expiresAt) {
+      await this.prisma.otpCode.delete({ where: { email } });
+      return { valid: false };
+    }
     if (entry.code !== code) return { valid: false };
-    otpStore.delete(email);
+
+    // Mark used — prevents replay attacks
+    await this.prisma.otpCode.update({
+      where: { email },
+      data: { used: true },
+    });
+
     return { valid: true };
   }
 
-  async startConversation(tenantId: string, customerId: string): Promise<{ conversationId: string }> {
+  // ── Conversation ───────────────────────────────────────────────────────────
+
+  async startConversation(
+    tenantId: string,
+    customerId: string,
+  ): Promise<{ conversationId: string }> {
     const conversation = await this.prisma.conversation.create({
-      data: { tenantId, customerId, modelUsed: 'gemini-2.5-flash', createdAt: new Date(), updatedAt: new Date() },
+      data: {
+        tenantId,
+        customerId,
+        modelUsed: 'gemini-2.5-flash',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
     });
     return { conversationId: conversation.id };
   }
 
-  async lookupOrder(tenantId: string, orderNumber: string): Promise<MappedOrder | null> {
+  // ── Order lookup ───────────────────────────────────────────────────────────
+
+  async lookupOrder(
+    tenantId: string,
+    orderNumber: string,
+  ): Promise<MappedOrder | null> {
     return this.shopifyService.getOrderByNumber(tenantId, orderNumber);
   }
 
-  async getOrdersByEmail(tenantId: string, email: string): Promise<MappedOrder[]> {
+  async getOrdersByEmail(
+    tenantId: string,
+    email: string,
+  ): Promise<MappedOrder[]> {
     return this.shopifyService.getOrdersByEmail(tenantId, email);
   }
 
-  private async getTenantMeta(tenantId: string) {
-    let tenantName = 'ShopEase';
-    let aiPersona = 'Aria, a friendly AI support agent';
-    let policy = DEFAULT_POLICY;
-    try {
-      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-      if (tenant) {
-        tenantName = tenant.name ?? tenantName;
-        const t = tenant as Record<string, unknown>;
-        if (t.aiPersona) aiPersona = t.aiPersona as string;
-        if (t.returnPolicy) policy = t.returnPolicy as ReturnPolicy;
-      }
-    } catch { this.logger.warn('Tenant fetch failed, using defaults'); }
-    return { tenantName, aiPersona, policy };
-  }
-
-  private extractReport(text: string): object | null {
-    const open = text.indexOf('<report>');
-    const close = text.indexOf('</report>');
-    if (open === -1 || close === -1) return null;
-    try { return JSON.parse(text.slice(open + 8, close).trim()) as object; }
-    catch { return null; }
-  }
+  // ── Gemini streaming ───────────────────────────────────────────────────────
 
   async streamGeminiMessage(
     messages: ChatMessage[],
@@ -124,9 +136,9 @@ export class ChatService {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    this.logger.log(`Gemini key present: ${!!process.env.GEMINI_API_KEY}, length: ${process.env.GEMINI_API_KEY?.length}`);
-
-    const policy = DEFAULT_POLICY;
+    this.logger.log(
+      `[Gemini] key present: ${!!process.env.GEMINI_API_KEY}, length: ${process.env.GEMINI_API_KEY?.length}`,
+    );
 
     const systemPrompt = orderContext
       ? `You are Aria, a friendly AI support agent for ShopEase — an online electronics store.
@@ -135,7 +147,7 @@ You are helping: ${orderContext.customerName}
 
 THEIR ORDER:
 - Order: ${orderContext.orderNumber}
-- Items: ${orderContext.lineItems.map(li => `${li.quantity}x ${li.title}`).join(', ')}
+- Items: ${orderContext.lineItems.map((li) => `${li.quantity}x ${li.title}`).join(', ')}
 - Total: ₹${(orderContext.totalAmount / 100).toLocaleString('en-IN')}
 - Ordered: ${orderContext.daysSinceOrder} days ago
 - Delivery: ${orderContext.fulfillmentStatus}
@@ -147,33 +159,27 @@ RETURN POLICY:
 - Non-returnable: earbuds (hygiene), gift cards
 - Refunds in 5-7 business days
 
-ROUTING RULES (you must follow these exactly):
+ROUTING RULES (follow exactly):
 - Wrong item / delivery issue → routeToDept: "Logistics"
-- Refund / defective product → routeToDept: "Finance"  
+- Refund / defective product → routeToDept: "Finance"
 - Complaint / bad experience → routeToDept: "CustomerCare"
 - Account / data issue → routeToDept: "HR"
 
-YOUR STRICT RULES:
+YOUR RULES:
 1. Maximum 2 exchanges to understand the issue
 2. NEVER say goodbye or close the chat
 3. NEVER give a reference number
 4. After understanding the issue, IMMEDIATELY output the report
-5. The <report> tag is MANDATORY — you cannot end without it
+5. The <report> tag is MANDATORY
 
-AFTER YOUR RESPONSE, YOU MUST OUTPUT THIS EXACT FORMAT:
+AFTER YOUR RESPONSE OUTPUT THIS EXACT FORMAT:
 <report>
 {"issueType":"REFUND","issueSummary":"brief summary here","actionRequested":"action here","routeToDept":"Finance","priority":"HIGH","aiConfidence":0.92,"eligible":true,"eligibilityReason":"reason here","recommendedAction":"AUTO_REFUND","refundAmount":${orderContext.totalAmount},"shopifyOrderId":"${orderContext.shopifyOrderId ?? ''}"}
-</report>
-
-Fill in the actual values. routeToDept MUST match the routing rules above. This is not optional.`
+</report>`
 
       : `You are Aria, a friendly AI support agent for ShopEase — an online electronics store.
 
-You can help with:
-- Return & refund requests
-- Order status and tracking
-- Product complaints
-- General store policies
+You can help with returns, refunds, order issues, complaints, and store policies.
 
 RETURN POLICY:
 - 30-day return window
@@ -182,35 +188,30 @@ RETURN POLICY:
 - Refunds take 5-7 business days
 
 HOW YOU WORK:
-- For general questions: answer directly, NO email needed
+- For general questions: answer directly, no email needed
 - For order-specific help: emit <need_email/> to get their email
 - Keep replies short — max 2-3 sentences
 - Be warm and human
 
 When you need order details, emit on its own line: <need_email/>
 
-CRITICAL REPORT RULE:
 Once you have order context AND know the issue, you MUST output <report></report> tags.
-NEVER say goodbye. NEVER close chat. ALWAYS end with <report>.
-
-Example:
-Customer: "my headphones stopped working"
-You: "So sorry! I need to verify your email to look up your order. <need_email/>"
-
-Customer: "what is your return policy"
-You: "We offer a 30-day return window on most electronics. Defective or wrong items are fully covered. Anything specific I can help with?"`;
+NEVER say goodbye. NEVER close chat. ALWAYS end with <report>.`;
 
     try {
       const safeMessages = Array.isArray(messages) ? messages : [];
       const geminiMessages = safeMessages
-        .filter(m => m?.content?.trim() !== '')
-        .map(m => ({
+        .filter((m) => m?.content?.trim() !== '')
+        .map((m) => ({
           role: m.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: m.content }],
         }));
 
       if (geminiMessages.length === 0) {
-        geminiMessages.push({ role: 'user', parts: [{ text: 'Hello, please greet me.' }] });
+        geminiMessages.push({
+          role: 'user',
+          parts: [{ text: 'Hello, please greet me.' }],
+        });
       }
 
       const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`;
@@ -251,29 +252,37 @@ You: "We offer a 30-day return window on most electronics. Defective or wrong it
           if (raw === '[DONE]') continue;
           try {
             const parsed = JSON.parse(raw) as {
-              candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+              candidates?: Array<{
+                content?: { parts?: Array<{ text?: string }> };
+              }>;
             };
-            const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+            const text =
+              parsed.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
             if (text) {
               fullText += text;
-              // Stream visible text (strip signals)
-              const visible = text.replace('<need_email/>', '').replace(/<report>[\s\S]*?<\/report>/g, '');
-              if (visible.trim()) res.write(`data: ${JSON.stringify({ text: visible })}\n\n`);
+              const visible = text
+                .replace('<need_email/>', '')
+                .replace(/<report>[\s\S]*?<\/report>/g, '');
+              if (visible.trim())
+                res.write(`data: ${JSON.stringify({ text: visible })}\n\n`);
             }
-          } catch { /* skip */ }
+          } catch {
+            /* skip malformed chunks */
+          }
         }
       }
 
-      // Extract and send report
+      // Extract and send report JSON to frontend
       const reportJson = this.extractReport(fullText);
       if (reportJson) {
-        this.logger.log(`Report generated: ${JSON.stringify(reportJson)}`);
+        this.logger.log(`[Report] Generated: ${JSON.stringify(reportJson)}`);
         res.write(`data: ${JSON.stringify({ reportJson })}\n\n`);
       }
 
-      // Send email signal
-      const needsEmail = fullText.includes('<need_email/>');
-      if (needsEmail) res.write(`data: ${JSON.stringify({ needsEmail: true })}\n\n`);
+      // Signal if email is needed
+      if (fullText.includes('<need_email/>')) {
+        res.write(`data: ${JSON.stringify({ needsEmail: true })}\n\n`);
+      }
 
       res.write('data: [DONE]\n\n');
     } catch (err) {
@@ -284,15 +293,18 @@ You: "We offer a 30-day return window on most electronics. Defective or wrong it
     }
   }
 
-  // Keep streamMessage for Claude (department side) if needed
-  async streamMessage(
-    conversationId: string,
-    messages: ChatMessage[],
-    res: Response,
-    orderContext?: OrderContext,
-    customerEmail?: string,
-  ): Promise<void> {
-    res.write(`data: ${JSON.stringify({ error: 'Use gemini-message endpoint' })}\n\n`);
-    res.end();
+  // ── Removed: streamMessage (Claude stub that only returned an error) ────────
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  private extractReport(text: string): object | null {
+    const open = text.indexOf('<report>');
+    const close = text.indexOf('</report>');
+    if (open === -1 || close === -1) return null;
+    try {
+      return JSON.parse(text.slice(open + 8, close).trim()) as object;
+    } catch {
+      return null;
+    }
   }
 }

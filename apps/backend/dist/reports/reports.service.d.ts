@@ -97,13 +97,13 @@ export declare class ReportsService {
             id: string;
             createdAt: Date;
             reportId: string;
-            escalatedById: string;
             escalationReason: string;
-            resolvedById: string | null;
             resolvedAt: Date | null;
             resolutionNote: string | null;
             decision: import(".prisma/client").$Enums.EscalationDecision | null;
             level: number;
+            escalatedById: string;
+            resolvedById: string | null;
         }[];
     } & {
         id: string;

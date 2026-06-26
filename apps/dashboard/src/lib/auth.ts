@@ -1,19 +1,16 @@
-import { apiGet, apiPost } from './api';
-import type { UserDto } from '../types';
+'use client';
 
-export async function getUser(): Promise<UserDto | null> {
-  try {
-    return await apiGet<UserDto>('/auth/me');
-  } catch {
-    return null;
-  }
+// Backend sets an httpOnly cookie on login — we never touch the token directly.
+// All authenticated requests just need credentials: 'include'.
+// Middleware reads the cookie server-side to gate routes.
+
+export function authFetchOptions(): RequestInit {
+  return { credentials: 'include' };
 }
 
-export async function logout(): Promise<void> {
+export async function logout() {
   try {
-    await apiPost('/auth/logout');
-  } catch {
-    // Even if the API call fails, redirect to login
-  }
-  window.location.href = '/login';
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch { /* ignore */ }
+  window.location.href = '/';
 }

@@ -1,6 +1,5 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-
 import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 
@@ -9,8 +8,14 @@ async function bootstrap() {
   app.use(cookieParser());
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+
+  // CORS origin — supports comma-separated list for multiple environments
+  const allowedOrigins = (process.env.FRONTEND_URL ?? 'http://localhost:3001')
+    .split(',')
+    .map((o) => o.trim());
+
   app.enableCors({
-    origin: 'http://localhost:3001',
+    origin: allowedOrigins,
     credentials: true,
   });
 
@@ -20,6 +25,7 @@ async function bootstrap() {
   };
 
   await app.listen(process.env.PORT ?? 3000);
-  console.log('Backend running on http://localhost:3000');
+  console.log(`Backend running on port ${process.env.PORT ?? 3000}`);
+  console.log(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
 }
 bootstrap();

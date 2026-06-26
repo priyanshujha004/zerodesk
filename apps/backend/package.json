@@ -2,9 +2,10 @@
   "name": "resolveiq-backend",
   "version": "0.0.1",
   "scripts": {
-    "build": "nest build",
-    "start:dev": "nest start --watch",
-    "start:prod": "prisma migrate deploy && node dist/main"
+  "build": "nest build",
+  "start:dev": "npm run build && node dist/main.js",
+  "start:watch": "nest start --watch",
+  "start:prod": "prisma migrate deploy && node dist/main.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

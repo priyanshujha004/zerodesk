@@ -4,90 +4,101 @@ import { useState } from 'react';
 
 interface Props {
   reportId: string;
-  token: string;
   onSuccess: () => void;
   onClose: () => void;
 }
 
-export function ActionPanel({ reportId, token, onSuccess, onClose }: Props) {
-  const [note, setNote] = useState('');
+export function ActionPanel({ reportId, onSuccess, onClose }: Props) {
+  const [note, setNote]             = useState('');
   const [actionTaken, setActionTaken] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
 
   async function submit() {
-    if (!note.trim() || !actionTaken.trim()) {
-      setError('Both fields are required.');
-      return;
-    }
-    setLoading(true);
-    setError(null);
+    if (!note.trim() || !actionTaken.trim()) { setError('Both fields are required.'); return; }
+    setLoading(true); setError(null);
     try {
-      const res = await fetch(`http://localhost:3000/api/workflow/action/${reportId}`, {
+      const res = await fetch(`/api/workflow/action/${reportId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ note, actionTaken }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { message?: string }).message ?? 'Request failed');
+        const err = await res.json().catch(() => ({})) as { message?: string };
+        throw new Error(err.message ?? 'Request failed');
       }
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
+  const inp: React.CSSProperties = {
+    width: '100%', background: '#0a0a0a', border: '1px solid #262626',
+    borderRadius: '6px', padding: '10px 12px', fontSize: '13px',
+    color: '#ffffff', outline: 'none', resize: 'none' as const,
+    fontFamily: 'Inter, sans-serif', transition: 'border-color 0.12s',
+  };
+  const lbl: React.CSSProperties = {
+    fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em',
+    textTransform: 'uppercase', color: '#404040', display: 'block', marginBottom: '6px',
+  };
+
   return (
-    <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-[#12121a] border border-slate-700/60 rounded-2xl p-6 w-full max-w-md shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-[#6ee7b7] font-semibold text-lg mb-4">Take Action</h2>
-        <label className="block text-xs text-slate-500 mb-1 uppercase tracking-wider">
-          Resolution Note
-        </label>
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+      backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', zIndex: 200, padding: '20px',
+    }} onClick={onClose}>
+      <div style={{
+        background: '#111111', border: '1px solid #262626', borderRadius: '10px',
+        padding: '24px', width: '100%', maxWidth: '420px',
+        boxShadow: '0 24px 48px rgba(0,0,0,0.6)',
+      }} onClick={e => e.stopPropagation()}>
+        <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '16px', fontWeight: 600, color: '#ffffff', marginBottom: '20px' }}>
+          Take Action
+        </p>
+
+        <label style={lbl}>Resolution Note</label>
         <textarea
-          className="w-full bg-[#0a0a0f] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#6ee7b7]/50 mb-3 resize-none"
-          rows={3}
-          placeholder="Describe what was done…"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
+          style={{ ...inp, marginBottom: '14px' }}
+          rows={3} placeholder="Describe what was done…"
+          value={note} onChange={e => setNote(e.target.value)}
+          onFocus={e => (e.target.style.borderColor = '#404040')}
+          onBlur={e => (e.target.style.borderColor = '#262626')}
         />
-        <label className="block text-xs text-slate-500 mb-1 uppercase tracking-wider">
-          Action Taken
-        </label>
+
+        <label style={lbl}>Action Taken</label>
         <input
-          className="w-full bg-[#0a0a0f] border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#6ee7b7]/50 mb-4"
-          placeholder="e.g. Refund processed, Account updated…"
-          value={actionTaken}
-          onChange={(e) => setActionTaken(e.target.value)}
+          style={{ ...inp, marginBottom: '20px' }}
+          type="text" placeholder="e.g. Refund processed, Account updated…"
+          value={actionTaken} onChange={e => setActionTaken(e.target.value)}
+          onFocus={e => (e.target.style.borderColor = '#404040')}
+          onBlur={e => (e.target.style.borderColor = '#262626')}
         />
 
         {error && (
-          <p className="text-red-400 text-xs mb-3 bg-red-900/20 border border-red-800/40 rounded px-3 py-2">
-            {error}
-          </p>
+          <div style={{
+            padding: '8px 12px', marginBottom: '16px',
+            background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)',
+            borderRadius: '5px', fontSize: '12px', color: '#f87171',
+          }}>{error}</div>
         )}
 
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={loading}
-            className="px-5 py-2 bg-[#6ee7b7] text-[#0a0a0f] font-semibold text-sm rounded-lg hover:bg-[#4dd9a4] transition-colors disabled:opacity-50"
-          >
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{
+            padding: '8px 16px', background: 'transparent', border: '1px solid #262626',
+            borderRadius: '6px', cursor: 'pointer', fontSize: '13px', color: '#737373',
+            fontFamily: 'Inter, sans-serif',
+          }}>Cancel</button>
+          <button onClick={submit} disabled={loading} style={{
+            padding: '8px 20px', background: loading ? '#1a1a1a' : '#ffffff',
+            color: '#000000', border: 'none', borderRadius: '6px',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            fontFamily: 'Inter, sans-serif', fontSize: '13px', fontWeight: 500,
+            opacity: loading ? 0.6 : 1, transition: 'background 0.12s',
+          }}>
             {loading ? 'Submitting…' : 'Submit'}
           </button>
         </div>

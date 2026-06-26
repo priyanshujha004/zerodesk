@@ -1,7 +1,3 @@
-/* ───────────────────────────────────────────────────────────
-   SUPERADMIN DASHBOARD
-─────────────────────────────────────────────────────────── */
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -10,25 +6,22 @@ import { ReportQueue } from '@/components/dashboard/ReportQueue';
 import { ReportItem, ReportRow } from '@/components/dashboard/ReportItem';
 import { Toast, useToast } from '@/components/dashboard/Toast';
 
-interface ApiReportSA {
+interface ApiReport {
   id: string; issueSummary: string; customer?: { name?: string };
   routeToDeptName: string; priority: 'HIGH' | 'MEDIUM' | 'LOW';
   slaDeadline?: string | null; status: string;
   escalationCount?: number; escalations?: { escalationReason?: string }[];
   createdAt: string; updatedAt: string;
 }
-interface ApiResponseSA { data: ApiReportSA[]; total: number; }
+interface ApiResponse { data: ApiReport[]; total: number; }
 
-function getTokenSA() {
-  return typeof window !== 'undefined' ? (localStorage.getItem('access_token') ?? '') : '';
-}
-function StatSA({ label, value, loading }: { label: string; value: number | string; loading: boolean }) {
+function Stat({ label, value, accent, loading }: { label: string; value: number | string; accent: string; loading: boolean }) {
   return (
-    <div style={{ background: '#111111', border: '1px solid #1a1a1a', borderRadius: '8px', padding: '18px 20px' }}>
-      <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#404040', marginBottom: '8px' }}>{label}</p>
+    <div style={{ background: '#080808', border: '1px solid #1a1a1a', borderRadius: '8px', padding: '18px 20px' }}>
+      <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#333333', marginBottom: '8px', fontFamily: 'Space Grotesk, sans-serif' }}>{label}</p>
       {loading
-        ? <div style={{ width: '48px', height: '28px', background: '#1a1a1a', borderRadius: '4px', animation: 'pulse 1.5s ease infinite' }} />
-        : <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '28px', fontWeight: 600, letterSpacing: '-0.02em', color: '#ffffff' }}>{value}</p>
+        ? <div style={{ width: '48px', height: '28px', background: '#111111', borderRadius: '4px', animation: 'pulse 1.5s ease infinite' }} />
+        : <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '30px', fontWeight: 600, letterSpacing: '-0.02em', color: accent }}>{value}</p>
       }
     </div>
   );
@@ -42,16 +35,16 @@ export default function SuperAdminDashboard() {
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetch_ = useCallback(async (stat = false) => {
+  const load = useCallback(async (stat = false) => {
     stat ? setRefreshing(true) : setLoading(true);
     try {
-      const h = { Authorization: `Bearer ${getTokenSA()}` };
+      const opts: RequestInit = { credentials: 'include' };
       const [eR, rR, cR] = await Promise.all([
-        fetch('/api/reports?status=ESCALATED&limit=50', { headers: h }),
-        fetch('/api/reports?status=RESOLVED&limit=50',  { headers: h }),
-        fetch('/api/reports?status=CLOSED&limit=50',    { headers: h }),
+        fetch('/api/reports?status=ESCALATED&limit=50', opts),
+        fetch('/api/reports?status=RESOLVED&limit=50', opts),
+        fetch('/api/reports?status=CLOSED&limit=50', opts),
       ]);
-      const [e, r, c]: ApiResponseSA[] = await Promise.all([eR.json(), rR.json(), cR.json()]);
+      const [e, r, c]: ApiResponse[] = await Promise.all([eR.json(), rR.json(), cR.json()]);
       const today = new Date().toDateString();
       const all = [...r.data, ...c.data];
       const avgMs = all.length ? all.reduce((a, x) => a + (new Date(x.updatedAt).getTime() - new Date(x.createdAt).getTime()), 0) / all.length : 0;
@@ -66,27 +59,26 @@ export default function SuperAdminDashboard() {
     finally { setLoading(false); setRefreshing(false); }
   }, [push]);
 
-  useEffect(() => { fetch_(); }, [fetch_]);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <>
       <div style={{ marginBottom: '28px' }}>
-        <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#404040', marginBottom: '6px' }}>ZeroDesk / SuperAdmin</p>
+        <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#333333', marginBottom: '6px', fontFamily: 'Space Grotesk, sans-serif' }}>ZeroDesk / SuperAdmin</p>
         <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '24px', fontWeight: 600, letterSpacing: '-0.02em', color: '#ffffff', marginBottom: '3px' }}>Escalation Center</h1>
         <p style={{ fontSize: '13px', color: '#737373' }}>Final resolution authority</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginBottom: '28px' }}>
-        <StatSA label="Escalated"       value={stats.totalEscalated}  loading={refreshing} />
-        <StatSA label="Resolved today"  value={stats.resolvedToday}   loading={refreshing} />
-        <StatSA label="Closed today"    value={stats.closedToday}     loading={refreshing} />
-        <StatSA label="Avg resolution"  value={`${stats.avgHours}h`}  loading={refreshing} />
+        <Stat label="Escalated"      value={stats.totalEscalated}  accent="#fb923c" loading={refreshing} />
+        <Stat label="Resolved today" value={stats.resolvedToday}   accent="#34d399" loading={refreshing} />
+        <Stat label="Closed today"   value={stats.closedToday}     accent="#38bdf8" loading={refreshing} />
+        <Stat label="Avg resolution" value={`${stats.avgHours}h`}  accent="#818cf8" loading={refreshing} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-        <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#404040' }}>Escalated reports</p>
-        <button onClick={() => fetch_(true)} disabled={refreshing}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#404040', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '5px', transition: 'color 0.1s' }}
+        <p style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#333333', fontFamily: 'Space Grotesk, sans-serif' }}>Escalated reports</p>
+        <button onClick={() => load(true)} disabled={refreshing} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#404040', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '5px' }}
           onMouseEnter={e => (e.currentTarget.style.color = '#ffffff')}
           onMouseLeave={e => (e.currentTarget.style.color = '#404040')}
         >
@@ -97,7 +89,7 @@ export default function SuperAdminDashboard() {
 
       <ReportQueue
         headers={['Report', 'Escalation', 'Customer', 'Level', 'Created']}
-        reports={reports} loading={loading} emptyMsg="No escalations pending"
+        reports={reports} loading={loading} emptyMsg="No escalations pending ✓"
         renderRow={r => (
           <ReportItem key={r.id} report={r} columns={['summary', 'escalation', 'customer', 'created']} onClick={() => router.push(`/report/${r.id}`)} />
         )}

@@ -12,15 +12,19 @@ async function bootstrap() {
     app.use((0, cookie_parser_1.default)());
     app.setGlobalPrefix('api');
     app.useGlobalPipes(new common_1.ValidationPipe({ whitelist: true }));
+    const allowedOrigins = (process.env.FRONTEND_URL ?? 'http://localhost:3001')
+        .split(',')
+        .map((o) => o.trim());
     app.enableCors({
-        origin: 'http://localhost:3001',
+        origin: allowedOrigins,
         credentials: true,
     });
     BigInt.prototype.toJSON = function () {
         return this.toString();
     };
     await app.listen(process.env.PORT ?? 3000);
-    console.log('Backend running on http://localhost:3000');
+    console.log(`Backend running on port ${process.env.PORT ?? 3000}`);
+    console.log(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
 }
 bootstrap();
 //# sourceMappingURL=main.js.map

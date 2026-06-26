@@ -20,15 +20,6 @@ interface LookupOrderBody {
     tenantId: string;
     orderNumber: string;
 }
-interface MessageBody {
-    conversationId: string;
-    messages: Array<{
-        role: 'user' | 'assistant';
-        content: string;
-    }>;
-    orderContext?: MappedOrder;
-    customerEmail?: string;
-}
 interface GeminiMessageBody {
     messages: Array<{
         role: 'user' | 'assistant';
@@ -55,6 +46,5 @@ export declare class ChatController {
     lookupOrder(body: LookupOrderBody): Promise<MappedOrder | {
         error: string;
     }>;
-    message(body: MessageBody, res: Response): Promise<void>;
 }
 export {};

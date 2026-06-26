@@ -10,8 +10,6 @@ export declare class ChatService {
     private readonly prisma;
     private readonly shopifyService;
     private readonly logger;
-    private readonly anthropic;
-    private readonly resend;
     constructor(prisma: PrismaService, shopifyService: ShopifyService);
     sendOtp(email: string): Promise<{
         sent: boolean;
@@ -24,9 +22,7 @@ export declare class ChatService {
     }>;
     lookupOrder(tenantId: string, orderNumber: string): Promise<MappedOrder | null>;
     getOrdersByEmail(tenantId: string, email: string): Promise<MappedOrder[]>;
-    private getTenantMeta;
-    private extractReport;
     streamGeminiMessage(messages: ChatMessage[], res: Response, orderContext?: OrderContext, customerEmail?: string, tenantId?: string): Promise<void>;
-    streamMessage(conversationId: string, messages: ChatMessage[], res: Response, orderContext?: OrderContext, customerEmail?: string): Promise<void>;
+    private extractReport;
 }
 export {};

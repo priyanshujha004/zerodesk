@@ -8,8 +8,8 @@ import { NotificationType, Role } from '@prisma/client';
 import { Resend } from 'resend';
  
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = 'noreply@resolveiq.app';
- 
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev'
+
 // ─── Event payload types ────────────────────────────────────────────────────
  
 interface StatusChangedPayload {
@@ -392,11 +392,11 @@ export class NotificationsService {
 </head>
 <body>
   <div class="card">
-    <div class="logo">ResolveIQ</div>
+    <div class="logo">ZeroDesk</div>
     <h2>${title}</h2>
     ${body}
     <div class="footer">
-      <p>© ResolveIQ. AI-powered returns resolution.</p>
+      <p>© ZeroDesk AI Powered Customer SaaS.</p>
     </div>
   </div>
 </body>

@@ -1,27 +1,35 @@
+// ─────────────────────────────────────────────────────────────
+// ReportQueue.tsx
+// ─────────────────────────────────────────────────────────────
 'use client';
 
 import { ReportRow } from './ReportItem';
 
-interface Props {
+interface QueueProps {
   headers: string[];
   reports: ReportRow[];
-  renderRow: (report: ReportRow) => React.ReactNode;
+  renderRow: (r: ReportRow) => React.ReactNode;
   loading?: boolean;
   emptyMsg?: string;
 }
 
-export function ReportQueue({ headers, reports, renderRow, loading, emptyMsg }: Props) {
+export function ReportQueue({ headers, reports, renderRow, loading, emptyMsg }: QueueProps) {
   return (
-    <div className="rounded-xl border border-slate-800/60 overflow-hidden bg-[#12121a]">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
+    <div style={{
+      border: '1px solid #1a1a1a', borderRadius: '8px',
+      overflow: 'hidden', background: '#080808',
+    }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr className="border-b border-slate-800">
-              {headers.map((h) => (
-                <th
-                  key={h}
-                  className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest"
-                >
+            <tr style={{ borderBottom: '1px solid #1a1a1a', background: '#000000' }}>
+              {headers.map(h => (
+                <th key={h} style={{
+                  padding: '10px 16px', textAlign: 'left',
+                  fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em',
+                  textTransform: 'uppercase', color: '#333333',
+                  fontFamily: 'Space Grotesk, sans-serif',
+                }}>
                   {h}
                 </th>
               ))}
@@ -30,28 +38,23 @@ export function ReportQueue({ headers, reports, renderRow, loading, emptyMsg }: 
           <tbody>
             {loading ? (
               <tr>
-                <td
-                  colSpan={headers.length}
-                  className="px-4 py-12 text-center text-slate-600 text-sm"
-                >
-                  <span className="inline-block animate-pulse">Loading reports…</span>
+                <td colSpan={headers.length} style={{ padding: '48px 16px', textAlign: 'center', color: '#333333', fontSize: '13px' }}>
+                  <span style={{ animation: 'pulse 1.5s ease infinite', display: 'inline-block' }}>Loading…</span>
                 </td>
               </tr>
             ) : reports.length === 0 ? (
               <tr>
-                <td
-                  colSpan={headers.length}
-                  className="px-4 py-12 text-center text-slate-600 text-sm"
-                >
+                <td colSpan={headers.length} style={{ padding: '48px 16px', textAlign: 'center', color: '#333333', fontSize: '13px' }}>
                   {emptyMsg ?? 'No reports found.'}
                 </td>
               </tr>
             ) : (
-              reports.map((r) => renderRow(r))
+              reports.map(r => renderRow(r))
             )}
           </tbody>
         </table>
       </div>
+      <style>{`@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}`}</style>
     </div>
   );
 }
