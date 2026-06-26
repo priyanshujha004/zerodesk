@@ -1,4 +1,4 @@
-# ResolveIQ
+# ZeroDesk
 
 AI-powered support workflow SaaS. Plugin for any business.
 
